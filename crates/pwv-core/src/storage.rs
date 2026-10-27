@@ -98,13 +98,51 @@ fn parent_dir(path: &Path) -> &Path {
     }
 }
 
-/// Writes `bytes` to a temp file in the same directory, flushes it to disk, then renames it
-/// over `path`, so a crash leaves either the old file or the new one, never a mix.
+/// `<vault>.bak`, next to the vault.
+fn backup_path(path: &Path) -> PathBuf {
+    let mut s = path.as_os_str().to_owned();
+    s.push(".bak");
+    PathBuf::from(s)
+}
+
+/// Writes `bytes` to a temp file in the same directory, flushes it to disk, copies the current
+/// vault to `<vault>.bak`, then renames the temp file over `path`. A crash leaves either the old
+/// file or the new one, never a mix.
 fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
-    let mut tmp = tempfile::NamedTempFile::new_in(parent_dir(path))?;
+    let dir = parent_dir(path);
+    let mut tmp = tempfile::NamedTempFile::new_in(dir)?;
+    restrict(tmp.path())?;
     tmp.write_all(bytes)?;
     tmp.as_file().sync_all()?;
+    if path.exists() {
+        let bak = backup_path(path);
+        fs::copy(path, &bak)?;
+        restrict(&bak)?;
+    }
     tmp.persist(path).map_err(|e| e.error)?;
+    sync_dir(dir)
+}
+
+/// Owner read/write only.
+#[cfg(unix)]
+fn restrict(path: &Path) -> io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(path, fs::Permissions::from_mode(0o600))
+}
+
+#[cfg(not(unix))]
+fn restrict(_: &Path) -> io::Result<()> {
+    Ok(()) // shortcut: Windows relies on the user profile ACLs; tighten in the hardening PR
+}
+
+/// Makes the rename itself durable.
+#[cfg(unix)]
+fn sync_dir(dir: &Path) -> io::Result<()> {
+    fs::File::open(dir)?.sync_all()
+}
+
+#[cfg(not(unix))]
+fn sync_dir(_: &Path) -> io::Result<()> {
     Ok(())
 }
 
@@ -192,5 +230,34 @@ mod file_tests {
         let (h2, _) = Header::parse(&after).unwrap();
         assert_eq!(h1.salt, h2.salt);
         assert_ne!(h1.nonce, h2.nonce);
+    }
+
+    #[test]
+    fn save_keeps_previous_file_as_bak() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = new_vault(&dir);
+        let first = fs::read(&path).unwrap();
+        unlock(&path, &password("correct horse"))
+            .unwrap()
+            .save()
+            .unwrap();
+        assert_eq!(fs::read(backup_path(&path)).unwrap(), first);
+        assert_ne!(fs::read(&path).unwrap(), first);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn vault_and_bak_are_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = new_vault(&dir);
+        unlock(&path, &password("correct horse"))
+            .unwrap()
+            .save()
+            .unwrap();
+        for p in [path.clone(), backup_path(&path)] {
+            let mode = fs::metadata(&p).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600, "{}", p.display());
+        }
     }
 }
