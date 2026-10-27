@@ -18,6 +18,10 @@ pub enum Error {
     /// Reading or writing the vault file failed.
     #[error("vault file I/O failed: {0}")]
     Io(#[from] std::io::Error),
+    /// The decrypted vault is not valid JSON for this schema. The message is fixed because
+    /// `serde_json` errors can quote the input, which is secret.
+    #[error("vault contents are malformed")]
+    Serde,
 }
 
 /// Result alias using [`Error`].
