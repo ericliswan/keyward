@@ -18,6 +18,7 @@ pwv-core = { path = "../pwv-core" }
 rpassword = "7.5.4"
 secrecy = "0.10.3"
 zeroize = "1.9.1"
+zxcvbn = "3.1.1"
 
 [lints]
 workspace = true
