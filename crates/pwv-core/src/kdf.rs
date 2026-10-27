@@ -155,4 +155,54 @@ mod tests {
         let other = SecretString::from("correct horse battery stapler");
         assert_ne!(*key, *derive_key(&other, &[1; SALT_LEN], &params).unwrap());
     }
+
+    #[test]
+    fn params_outside_floor_and_ceiling_are_rejected() {
+        let (lo, hi) = (KdfParams::FLOOR, KdfParams::CEILING);
+        assert!(lo.validate().is_ok());
+        assert!(hi.validate().is_ok());
+        let out_of_range = [
+            KdfParams {
+                m_cost_kib: lo.m_cost_kib - 1,
+                ..lo
+            },
+            KdfParams {
+                t_cost: lo.t_cost - 1,
+                ..lo
+            },
+            KdfParams {
+                p_cost: lo.p_cost - 1,
+                ..lo
+            },
+            KdfParams {
+                m_cost_kib: hi.m_cost_kib + 1,
+                ..hi
+            },
+            KdfParams {
+                t_cost: hi.t_cost + 1,
+                ..hi
+            },
+            KdfParams {
+                p_cost: hi.p_cost + 1,
+                ..hi
+            },
+        ];
+        for params in out_of_range {
+            assert!(
+                matches!(params.validate(), Err(Error::ParamsOutOfRange)),
+                "{params:?}"
+            );
+            let res = derive_key(&SecretString::from("pw"), &[0; SALT_LEN], &params);
+            assert!(matches!(res, Err(Error::ParamsOutOfRange)), "{params:?}");
+        }
+    }
+
+    /// Runs only without `insecure-test-kdf`: release builds must never default below the floor.
+    #[cfg(not(feature = "insecure-test-kdf"))]
+    #[test]
+    fn production_default_meets_production_floor() {
+        assert_eq!(KdfParams::default(), KdfParams::PRODUCTION);
+        assert_eq!(KdfParams::FLOOR, KdfParams::PRODUCTION_FLOOR);
+        assert!(KdfParams::default().validate().is_ok());
+    }
 }
