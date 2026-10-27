@@ -29,3 +29,21 @@ pub struct Header {
     /// Random nonce; fresh on every save.
     pub nonce: [u8; NONCE_LEN],
 }
+
+impl Header {
+    /// Encodes the header into its fixed 59-byte layout.
+    #[must_use]
+    pub fn to_bytes(&self) -> [u8; HEADER_LEN] {
+        let mut out = [0u8; HEADER_LEN];
+        out[0..4].copy_from_slice(&MAGIC);
+        out[4] = FORMAT_VERSION;
+        out[5] = KDF_ARGON2ID;
+        out[6..10].copy_from_slice(&self.kdf.m_cost_kib.to_le_bytes());
+        out[10..14].copy_from_slice(&self.kdf.t_cost.to_le_bytes());
+        out[14..18].copy_from_slice(&self.kdf.p_cost.to_le_bytes());
+        out[18..34].copy_from_slice(&self.salt);
+        out[34] = CIPHER_XCHACHA20_POLY1305;
+        out[35..59].copy_from_slice(&self.nonce);
+        out
+    }
+}
