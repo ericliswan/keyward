@@ -41,6 +41,9 @@ pub enum Command {
         /// Print the password to stdout instead.
         #[arg(long)]
         show: bool,
+        /// With --show, print even when stdout is not a terminal (a pipe or a file).
+        #[arg(long, requires = "show")]
+        force: bool,
     },
     /// List sites and usernames, never passwords.
     List {
