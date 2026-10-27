@@ -28,7 +28,9 @@ pub fn run(cli: Cli) -> Result<()> {
     let name = match command {
         Command::Init { force } => return init::run(&vault, force, &mut prompt),
         Command::Add { site } => return add::run(&vault, site, &mut prompt),
-        Command::Get { site, show } => return get::run(&vault, &site, show, &mut prompt),
+        Command::Get { site, show, force } => {
+            return get::run(&vault, &site, show, force, &mut prompt);
+        }
         Command::List { search } => return list::run(&vault, search.as_deref(), &mut prompt),
         Command::Edit { .. } => "edit",
         Command::Delete { .. } => "delete",
