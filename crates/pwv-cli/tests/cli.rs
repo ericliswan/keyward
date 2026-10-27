@@ -67,6 +67,13 @@ fn version_prints_the_crate_version() {
 fn usage_errors_exit_2() {
     pwv().arg("frobnicate").assert().code(2);
     pwv().assert().code(2);
+    // edit takes exactly one field flag.
+    pwv().args(["edit", "mail"]).assert().code(2);
+    pwv()
+        .args(["edit", "mail", "--username", "--notes"])
+        .assert()
+        .code(2);
+    pwv().args(["get", "mail", "--force"]).assert().code(2);
 }
 
 #[test]
@@ -174,4 +181,90 @@ fn added_entries_are_listed_without_secrets() {
     let mail = unlocked.vault.find("mail.example");
     assert_eq!(mail[0].password.expose(), "s3cret-mail");
     assert_eq!(mail[0].notes.expose(), "pin 4321");
+}
+
+#[test]
+#[cfg_attr(
+    not(feature = "insecure-test-kdf"),
+    ignore = "slow production KDF; run with --features insecure-test-kdf"
+)]
+fn get_edit_and_delete_choose_among_matching_entries() {
+    let dir = tempfile::tempdir().unwrap();
+    let vault = dir.path().join("vault.pwv");
+    init(&vault, &[MASTER, MASTER], &[]).success();
+    run(
+        &vault,
+        &["add", "mail"],
+        &[MASTER, "alice", "s3cret-alice", ""],
+    )
+    .success();
+    run(&vault, &["add", "Mail"], &[MASTER, "bob", "s3cret-bob", ""]).success();
+    let contains = predicate::str::contains;
+
+    // stdout is a pipe here, so these are refused before the master password is read.
+    run(&vault, &["get", "mail", "--show"], &[])
+        .code(1)
+        .stdout("")
+        .stderr(contains("--force"));
+    run(&vault, &["get", "mail"], &[])
+        .code(1)
+        .stderr(contains("--show"));
+    run(
+        &vault,
+        &["get", "mail", "--show", "--force"],
+        &[MASTER, "2"],
+    )
+    .success()
+    .stdout("s3cret-bob\n")
+    .stderr(
+        contains("1) mail  alice")
+            .and(contains("2) Mail  bob"))
+            .and(contains("s3cret").not()),
+    );
+    run(&vault, &["get", "web", "--show", "--force"], &[MASTER])
+        .code(1)
+        .stderr(contains("no entry for web"));
+
+    run(
+        &vault,
+        &["edit", "mail", "--password"],
+        &[MASTER, "1", "n3w-alice"],
+    )
+    .success()
+    .stderr(contains("n3w").not());
+    run(
+        &vault,
+        &["edit", "mail", "--notes"],
+        &[MASTER, "1", "pin 9876"],
+    )
+    .success()
+    .stderr(contains("9876").not());
+    run(
+        &vault,
+        &["edit", "mail", "--username"],
+        &[MASTER, "2", "robert"],
+    )
+    .success();
+    run(&vault, &["edit", "mail", "--password"], &[MASTER, "1", ""])
+        .code(1)
+        .stderr(contains("must not be empty"));
+    let unlocked = pwv_core::storage::unlock(&vault, &SecretString::from(MASTER)).unwrap();
+    let found = unlocked.vault.find("mail");
+    let (alice, robert) = (found[0], found[1]);
+    assert_eq!(alice.password.expose(), "n3w-alice");
+    assert_eq!(alice.notes.expose(), "pin 9876");
+    assert!(alice.updated_at > alice.created_at);
+    assert_eq!(robert.username, "robert");
+    assert_eq!(robert.password.expose(), "s3cret-bob");
+
+    let both = "SITE  USERNAME\nmail  alice\nMail  robert\n";
+    run(&vault, &["delete", "mail"], &[MASTER, "1", "n"])
+        .success()
+        .stderr(contains("Nothing deleted"));
+    run(&vault, &["list"], &[MASTER]).stdout(both);
+    run(&vault, &["delete", "mail"], &[MASTER, "1", "YES"]).success();
+    run(&vault, &["list"], &[MASTER]).stdout("SITE  USERNAME\nMail  robert\n");
+    // One match left, so --yes deletes it without asking which or whether.
+    run(&vault, &["delete", "mail", "--yes"], &[MASTER]).success();
+    run(&vault, &["list"], &[MASTER]).stdout("");
 }
