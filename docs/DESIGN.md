@@ -57,12 +57,30 @@ All integers are little-endian.
 
 | Profile | m_cost | t_cost | p_cost | Notes |
 | --- | --- | --- | --- | --- |
-| Default (production) | 65 536 KiB (64 MiB) | 3 | 4 | RFC 9106 second recommended option; calibrated on real hardware in a later PR |
+| Default (production) | 262 144 KiB (256 MiB) | 3 | 4 | About 0.6 s unlock on an Apple M1; see the calibration below and ADR 0002 |
 | Floor (reject below) | 19 456 KiB | 2 | 1 | OWASP minimum |
 | Ceiling (reject above) | 4 194 304 KiB (4 GiB) | 10 | 16 | Stops a malicious header from exhausting memory or time |
 | Test-only | 8 KiB-scale values | 1 | 1 | Only with the cargo feature `insecure-test-kdf`, never on by default |
 
 The values used are always the values written to the header, so a vault created with one default still opens after the default changes.
+
+### Calibration
+
+The target is an unlock of 0.5–1 s. `cargo run --release --example kdf_bench` times `derive_key` for several profiles. Results on the owner's laptop (Apple M1, 8 GiB RAM, rustc 1.99.1, `argon2` 0.6.0), fastest and slowest of 3 runs:
+
+| Profile | m_cost | t_cost | p_cost | Time |
+| --- | --- | --- | --- | --- |
+| Floor (OWASP) | 19 MiB | 2 | 1 | 24–25 ms |
+| RFC 9106 second option | 64 MiB | 3 | 4 | 142–201 ms |
+| RFC 9106 second option, one lane | 64 MiB | 3 | 1 | 133–136 ms |
+| | 128 MiB | 3 | 4 | 283–315 ms |
+| **Default** | 256 MiB | 3 | 4 | 582–633 ms |
+| | 512 MiB | 2 | 4 | 808–1 065 ms |
+
+- The `argon2` crate's `parallel` feature is off, so the four lanes run one after another and four lanes take about as long as one.
+- RFC 9106's first option (2 GiB, t = 1) is below the floor's `t_cost` of 2 and is not offered.
+
+[ADR 0002](decisions/0002-kdf-default-parameters.md) records why 256 MiB was chosen.
 
 ## Error policy
 

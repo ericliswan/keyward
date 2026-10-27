@@ -86,7 +86,7 @@ When several entries match `<site>`, list them with an index and ask which one.
 ### KDF parameters
 | Profile | m_cost | t_cost | p_cost | Notes |
 | --- | --- | --- | --- | --- |
-| Default (production) | 65 536 KiB (64 MiB) | 3 | 4 | RFC 9106 second recommended option; calibrate in PR #10 |
+| Default (production) | 262 144 KiB (256 MiB) | 3 | 4 | Calibrated in PR #10 to ~0.6 s on the owner's M1; see ADR 0002 |
 | Floor (reject below) | 19 456 KiB | 2 | 1 | OWASP minimum |
 | Ceiling (reject above) | 4 194 304 KiB (4 GiB) | 10 | 16 | Prevents a malicious header from exhausting memory |
 | Test-only | 8 KiB-scale values | 1 | 1 | Only with cargo feature `insecure-test-kdf`, never default |

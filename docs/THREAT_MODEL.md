@@ -13,7 +13,7 @@ This is a draft written before any code. The final version, with each claim link
 
 | Adversary | Can do | Mitigation | Status |
 | --- | --- | --- | --- |
-| File thief | Copy the vault file and guess passwords offline | Argon2id with a memory-hard default (64 MiB, 3 passes) and a random salt per vault; master password must be at least 12 characters with zxcvbn score ≥ 3 | In scope |
+| File thief | Copy the vault file and guess passwords offline | Argon2id with a memory-hard default (256 MiB, 3 passes) and a random salt per vault; master password must be at least 12 characters with zxcvbn score ≥ 3 | In scope |
 | File tamperer | Change any byte of the vault | XChaCha20-Poly1305 authenticates the ciphertext and the whole header as AAD; any change fails with exit code 3 | In scope |
 | Header downgrade | Lower the KDF parameters to speed up guessing, or raise them to exhaust memory | Parameters are authenticated, and checked against a floor and ceiling before Argon2 runs | In scope |
 | Rollback | Replace the vault with an older valid copy | Not detectable without external state | Known limitation |
