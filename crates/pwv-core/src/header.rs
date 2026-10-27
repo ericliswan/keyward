@@ -2,6 +2,7 @@
 //!
 //! See `docs/DESIGN.md` for the byte layout. All integers are little-endian.
 
+use crate::error::{Error, Result};
 use crate::kdf::{KdfParams, SALT_LEN};
 
 /// File magic, `b"PWVF"`.
@@ -45,5 +46,42 @@ impl Header {
         out[34] = CIPHER_XCHACHA20_POLY1305;
         out[35..59].copy_from_slice(&self.nonce);
         out
+    }
+
+    /// Parses and validates the header at the start of a vault file.
+    ///
+    /// Returns the header and the remaining bytes (`ciphertext ‖ tag`). Checks, in
+    /// order: length, magic, format version, KDF and cipher ids, then the KDF
+    /// parameters against the floor and ceiling, so no hostile parameter reaches Argon2.
+    ///
+    /// # Errors
+    /// - [`Error::Format`] if the file is shorter than a header plus tag, or the magic is wrong.
+    /// - [`Error::UnsupportedVersion`] for an unknown format version, KDF or cipher id.
+    /// - [`Error::ParamsOutOfRange`] if the KDF parameters fail [`KdfParams::validate`].
+    pub fn parse(bytes: &[u8]) -> Result<(Self, &[u8])> {
+        if bytes.len() < HEADER_LEN + TAG_LEN {
+            return Err(Error::Format);
+        }
+        let (h, rest) = bytes
+            .split_first_chunk::<HEADER_LEN>()
+            .ok_or(Error::Format)?;
+        if h[0..4] != MAGIC {
+            return Err(Error::Format);
+        }
+        if h[4] != FORMAT_VERSION || h[5] != KDF_ARGON2ID || h[34] != CIPHER_XCHACHA20_POLY1305 {
+            return Err(Error::UnsupportedVersion);
+        }
+        let le_u32 = |i: usize| u32::from_le_bytes([h[i], h[i + 1], h[i + 2], h[i + 3]]);
+        let kdf = KdfParams {
+            m_cost_kib: le_u32(6),
+            t_cost: le_u32(10),
+            p_cost: le_u32(14),
+        };
+        kdf.validate()?;
+        let mut salt = [0u8; SALT_LEN];
+        salt.copy_from_slice(&h[18..34]);
+        let mut nonce = [0u8; NONCE_LEN];
+        nonce.copy_from_slice(&h[35..59]);
+        Ok((Self { kdf, salt, nonce }, rest))
     }
 }
