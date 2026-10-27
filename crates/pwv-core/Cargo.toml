@@ -30,3 +30,4 @@ insecure-test-kdf = []
 
 [dev-dependencies]
 hex-literal = "1.1.0"
+proptest = "1.12.0"
