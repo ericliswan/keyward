@@ -236,6 +236,17 @@ mod tests {
     }
 
     #[test]
+    fn debug_output_never_contains_password_text() {
+        let mut vault = Vault::default();
+        vault.insert(entry("example.com"));
+        for out in [format!("{vault:?}"), format!("{vault:#?}")] {
+            assert!(!out.contains("hunter2"), "{out}");
+            assert!(!out.contains("recovery codes"), "{out}");
+            assert!(out.contains("example.com"));
+        }
+    }
+
+    #[test]
     fn rejects_unknown_schema_version() {
         let err = Vault::from_json(br#"{"schema_version":2,"entries":[]}"#).unwrap_err();
         assert!(matches!(err, Error::UnsupportedVersion));
