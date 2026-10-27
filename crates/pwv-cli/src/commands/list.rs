@@ -8,15 +8,26 @@ use pwv_core::model::Entry;
 
 use crate::prompt::Prompter;
 
-pub fn run(path: &Path, prompt: &mut Prompter<impl BufRead>) -> Result<()> {
+pub fn run(path: &Path, search: Option<&str>, prompt: &mut Prompter<impl BufRead>) -> Result<()> {
     let unlocked = super::unlock(path, prompt)?;
-    let entries: Vec<&Entry> = unlocked.vault.entries.iter().collect();
+    let query = search.map(str::to_lowercase);
+    let entries: Vec<&Entry> = unlocked
+        .vault
+        .entries
+        .iter()
+        .filter(|e| query.as_deref().is_none_or(|q| matches(e, q)))
+        .collect();
     if entries.is_empty() {
         eprintln!("No entries found");
     } else {
         print!("{}", table(entries));
     }
     Ok(())
+}
+
+/// Case-insensitive substring match on site or username; `query` is already lowercase.
+fn matches(entry: &Entry, query: &str) -> bool {
+    entry.site.to_lowercase().contains(query) || entry.username.to_lowercase().contains(query)
 }
 
 /// Site and username columns, sorted by site then username, ignoring case.
@@ -67,5 +78,15 @@ mail          bob
 ";
         assert_eq!(out, expected);
         assert!(!out.contains("hunter2") && !out.contains("1234"));
+    }
+
+    #[test]
+    fn search_matches_site_or_username_ignoring_case() {
+        let e = entry("Bank.Example", "Alice");
+        assert!(matches(&e, "bank"));
+        assert!(matches(&e, "k.ex"));
+        assert!(matches(&e, "alice"));
+        assert!(!matches(&e, "bob"));
+        assert!(!matches(&e, "hunter")); // the password is never searched
     }
 }
