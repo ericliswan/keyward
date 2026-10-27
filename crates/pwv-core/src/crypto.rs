@@ -122,4 +122,27 @@ mod tests {
         };
         assert_eq!(cipher.decrypt(&nonce.into(), payload).unwrap(), plaintext);
     }
+
+    #[test]
+    fn changing_any_header_byte_fails() {
+        let file = seal(&KEY, &header(), b"secret");
+        for i in 0..HEADER_LEN {
+            for bit in 0..8 {
+                let mut bad = file.clone();
+                bad[i] ^= 1 << bit;
+                // Parse may reject first (magic, ids, params); otherwise the tag must.
+                assert!(open(&KEY, &bad).is_err(), "byte {i} bit {bit} accepted");
+            }
+        }
+    }
+
+    #[test]
+    fn changing_ciphertext_or_tag_fails_with_decrypt() {
+        let file = seal(&KEY, &header(), b"secret");
+        for i in HEADER_LEN..file.len() {
+            let mut bad = file.clone();
+            bad[i] ^= 1;
+            assert!(matches!(open(&KEY, &bad), Err(Error::Decrypt)));
+        }
+    }
 }
