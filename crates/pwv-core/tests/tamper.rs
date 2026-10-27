@@ -21,11 +21,13 @@ fn password(s: &str) -> SecretString {
     SecretString::from(s.to_owned())
 }
 
-/// The bytes of a freshly created vault with no entries.
+/// The bytes of a freshly created vault with no entries, checked to unlock as-is so the
+/// rejection tests cannot pass just because unlocking always fails.
 fn new_vault_bytes() -> Vec<u8> {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("vault.pwv");
     storage::create(&path, &password(PASSWORD)).unwrap();
+    storage::unlock(&path, &password(PASSWORD)).unwrap();
     fs::read(&path).unwrap()
 }
 
