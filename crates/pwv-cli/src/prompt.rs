@@ -1,6 +1,5 @@
 //! Questions for the user: hidden prompts on the terminal, or lines from stdin with
 //! `--password-stdin`.
-#![expect(dead_code, reason = "commands start prompting in the init PR")]
 
 use std::io::{self, BufRead, Write};
 
@@ -44,6 +43,10 @@ impl<R: BufRead> Prompter<R> {
     }
 
     /// Asks for a visible answer. The prompt goes to stderr so stdout stays clean.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "used from the add command onwards")
+    )]
     pub fn line(&mut self, label: &str) -> Result<String> {
         if !self.password_stdin {
             eprint!("{label}: ");

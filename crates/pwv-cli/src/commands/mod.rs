@@ -1,21 +1,25 @@
 //! Subcommand implementations, one module each.
 
+mod init;
+
 use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
 
 use crate::cli::{Cli, Command};
+use crate::prompt::Prompter;
 
 /// Runs the parsed command line.
 pub fn run(cli: Cli) -> Result<()> {
     let Cli {
         vault,
-        password_stdin: _,
+        password_stdin,
         command,
     } = cli;
-    let _vault = vault_path(vault)?;
+    let vault = vault_path(vault)?;
+    let mut prompt = Prompter::stdin(password_stdin);
     let name = match command {
-        Command::Init => "init",
+        Command::Init => return init::run(&vault, &mut prompt),
         Command::Add { .. } => "add",
         Command::Get { .. } => "get",
         Command::List => "list",
