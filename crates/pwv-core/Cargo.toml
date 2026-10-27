@@ -19,3 +19,6 @@ zeroize = "1.9.1"
 [features]
 # Lowers the default and floor KDF parameters so tests run fast. Never enable in a release build.
 insecure-test-kdf = []
+
+[dev-dependencies]
+hex-literal = "1.1.0"

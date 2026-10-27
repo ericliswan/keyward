@@ -114,3 +114,45 @@ pub fn derive_key(
         .map_err(|_| Error::ParamsOutOfRange)?;
     Ok(key)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hex_literal::hex;
+
+    /// RFC 9106 §5.3 Argon2id test vector. It needs a secret and associated data,
+    /// which `derive_key` never uses, so it calls the crate directly to pin the
+    /// exact algorithm and version `derive_key` selects.
+    #[test]
+    fn argon2id_rfc9106_known_answer() {
+        let params = argon2::ParamsBuilder::new()
+            .m_cost(32)
+            .t_cost(3)
+            .p_cost(4)
+            .data(argon2::AssociatedData::new(&[0x04; 12]).unwrap())
+            .build()
+            .unwrap();
+        let argon =
+            Argon2::new_with_secret(&[0x03; 8], Algorithm::Argon2id, Version::V0x13, params)
+                .unwrap();
+        let mut out = [0u8; 32];
+        argon
+            .hash_password_into(&[0x01; 32], &[0x02; 16], &mut out)
+            .unwrap();
+        assert_eq!(
+            out,
+            hex!("0d640df58d78766c08c037a34a8b53c9d01ef0452d75b65eb52520e96b01e659")
+        );
+    }
+
+    #[test]
+    fn derive_key_is_deterministic_and_depends_on_inputs() {
+        let params = KdfParams::FLOOR;
+        let pw = SecretString::from("correct horse battery staple");
+        let key = derive_key(&pw, &[1; SALT_LEN], &params).unwrap();
+        assert_eq!(*key, *derive_key(&pw, &[1; SALT_LEN], &params).unwrap());
+        assert_ne!(*key, *derive_key(&pw, &[2; SALT_LEN], &params).unwrap());
+        let other = SecretString::from("correct horse battery stapler");
+        assert_ne!(*key, *derive_key(&other, &[1; SALT_LEN], &params).unwrap());
+    }
+}
