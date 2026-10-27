@@ -1,6 +1,7 @@
 //! Subcommand implementations, one module each.
 
 mod add;
+mod edit;
 mod get;
 mod init;
 mod list;
@@ -9,8 +10,9 @@ use std::io::BufRead;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use pwv_core::model::{Entry, Vault};
+use pwv_core::model::{Entry, SecretText, Vault};
 use pwv_core::storage::UnlockedVault;
+use secrecy::{ExposeSecret, SecretString};
 
 use crate::cli::{Cli, Command};
 
@@ -32,7 +34,7 @@ pub fn run(cli: Cli) -> Result<()> {
             return get::run(&vault, &site, show, force, &mut prompt);
         }
         Command::List { search } => return list::run(&vault, search.as_deref(), &mut prompt),
-        Command::Edit { .. } => "edit",
+        Command::Edit { site, field } => return edit::run(&vault, &site, &field, &mut prompt),
         Command::Delete { .. } => "delete",
         Command::ChangeMaster => "change-master",
         Command::Gen => "gen",
@@ -53,6 +55,19 @@ fn unlock(path: &Path, prompt: &mut Prompter<impl BufRead>) -> Result<UnlockedVa
     }
     let password = prompt.secret("Master password")?;
     Ok(pwv_core::storage::unlock(path, &password)?)
+}
+
+/// A non-empty entry password from a hidden prompt.
+fn new_password(prompt: &mut Prompter<impl BufRead>, label: &str) -> Result<SecretText> {
+    let password = prompt.secret(label)?;
+    if password.expose_secret().is_empty() {
+        bail!("password must not be empty");
+    }
+    Ok(secret_text(&password))
+}
+
+fn secret_text(secret: &SecretString) -> SecretText {
+    SecretText::from(secret.expose_secret().to_owned())
 }
 
 /// The entry for `site`. When several match, lists them by number on stderr and asks which one.
