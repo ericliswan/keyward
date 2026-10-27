@@ -19,7 +19,7 @@ pub fn run(cli: Cli) -> Result<()> {
     let vault = vault_path(vault)?;
     let mut prompt = Prompter::stdin(password_stdin);
     let name = match command {
-        Command::Init => return init::run(&vault, &mut prompt),
+        Command::Init { force } => return init::run(&vault, force, &mut prompt),
         Command::Add { .. } => "add",
         Command::Get { .. } => "get",
         Command::List => "list",

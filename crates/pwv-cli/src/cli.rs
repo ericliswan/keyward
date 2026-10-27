@@ -24,7 +24,11 @@ pub struct Cli {
 #[derive(Debug, Subcommand)]
 pub enum Command {
     /// Create a new, empty vault.
-    Init,
+    Init {
+        /// Replace an existing vault. The old file is kept as `<vault>.bak`.
+        #[arg(long)]
+        force: bool,
+    },
     /// Add an entry; prompts for username, password and notes.
     Add {
         /// Site or service name.
