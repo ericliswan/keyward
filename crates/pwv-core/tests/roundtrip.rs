@@ -6,7 +6,10 @@
 // `allow-unwrap-in-tests` does not reach helper functions in integration tests.
 #![allow(clippy::unwrap_used)]
 
+use std::fs;
+
 use proptest::prelude::*;
+use pwv_core::header::Header;
 use pwv_core::model::{Entry, SecretText};
 use pwv_core::storage;
 use secrecy::SecretString;
@@ -93,4 +96,22 @@ proptest! {
             entries.iter().map(fields).collect::<Vec<_>>()
         );
     }
+}
+
+/// README claim: every save uses a fresh random nonce and keeps the salt, so saving the same
+/// vault twice never produces the same ciphertext.
+#[test]
+fn two_saves_produce_different_nonces_and_ciphertexts() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("vault.pwv");
+    let unlocked = storage::create(&path, &password(PASSWORD)).unwrap();
+    let first = fs::read(&path).unwrap();
+    unlocked.save().unwrap();
+    let second = fs::read(&path).unwrap();
+
+    let (h1, c1) = Header::parse(&first).unwrap();
+    let (h2, c2) = Header::parse(&second).unwrap();
+    assert_eq!(h1.salt, h2.salt);
+    assert_ne!(h1.nonce, h2.nonce);
+    assert_ne!(c1, c2);
 }

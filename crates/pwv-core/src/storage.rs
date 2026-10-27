@@ -217,22 +217,6 @@ mod file_tests {
     }
 
     #[test]
-    fn save_keeps_salt_and_changes_nonce() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = new_vault(&dir);
-        let before = fs::read(&path).unwrap();
-        unlock(&path, &password("correct horse"))
-            .unwrap()
-            .save()
-            .unwrap();
-        let after = fs::read(&path).unwrap();
-        let (h1, _) = Header::parse(&before).unwrap();
-        let (h2, _) = Header::parse(&after).unwrap();
-        assert_eq!(h1.salt, h2.salt);
-        assert_ne!(h1.nonce, h2.nonce);
-    }
-
-    #[test]
     fn save_keeps_previous_file_as_bak() {
         let dir = tempfile::tempdir().unwrap();
         let path = new_vault(&dir);
