@@ -502,14 +502,14 @@ dependencies = [
 
 [[package]]
 name = "pwv-cli"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "pwv-core",
 ]
 
 [[package]]
 name = "pwv-core"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "argon2",
  "chacha20poly1305",
