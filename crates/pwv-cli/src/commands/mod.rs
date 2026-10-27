@@ -2,6 +2,7 @@
 
 mod add;
 mod init;
+mod list;
 
 use std::io::BufRead;
 use std::path::{Path, PathBuf};
@@ -26,7 +27,7 @@ pub fn run(cli: Cli) -> Result<()> {
         Command::Init { force } => return init::run(&vault, force, &mut prompt),
         Command::Add { site } => return add::run(&vault, site, &mut prompt),
         Command::Get { .. } => "get",
-        Command::List => "list",
+        Command::List => return list::run(&vault, &mut prompt),
         Command::Edit { .. } => "edit",
         Command::Delete { .. } => "delete",
         Command::ChangeMaster => "change-master",
