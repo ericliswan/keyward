@@ -85,3 +85,128 @@ impl Header {
         Ok((Self { kdf, salt, nonce }, rest))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample() -> Header {
+        Header {
+            kdf: KdfParams::FLOOR,
+            salt: [0xAA; SALT_LEN],
+            nonce: [0xBB; NONCE_LEN],
+        }
+    }
+
+    /// A minimal valid file: header followed by a tag-sized body.
+    fn file() -> Vec<u8> {
+        let mut f = sample().to_bytes().to_vec();
+        f.extend_from_slice(&[0xCC; TAG_LEN]);
+        f
+    }
+
+    #[test]
+    fn round_trip_returns_header_and_body() {
+        let f = file();
+        let (h, rest) = Header::parse(&f).unwrap();
+        assert_eq!(h, sample());
+        assert_eq!(rest, &[0xCC; TAG_LEN]);
+    }
+
+    #[test]
+    fn layout_matches_design_doc() {
+        let b = sample().to_bytes();
+        assert_eq!(&b[0..4], b"PWVF");
+        assert_eq!((b[4], b[5], b[34]), (1, 1, 1));
+        assert_eq!(b[6..10], KdfParams::FLOOR.m_cost_kib.to_le_bytes());
+        assert_eq!(b[10..14], KdfParams::FLOOR.t_cost.to_le_bytes());
+        assert_eq!(b[14..18], KdfParams::FLOOR.p_cost.to_le_bytes());
+        assert_eq!(b[18..34], [0xAA; SALT_LEN]);
+        assert_eq!(b[35..59], [0xBB; NONCE_LEN]);
+    }
+
+    #[test]
+    fn every_short_length_is_a_format_error() {
+        let f = file();
+        for len in 0..f.len() {
+            assert!(
+                matches!(Header::parse(&f[..len]), Err(Error::Format)),
+                "len {len}"
+            );
+        }
+    }
+
+    #[test]
+    fn bad_magic_is_a_format_error() {
+        for i in 0..4 {
+            let mut f = file();
+            f[i] ^= 0x01;
+            assert!(matches!(Header::parse(&f), Err(Error::Format)), "byte {i}");
+        }
+    }
+
+    #[test]
+    fn unknown_version_kdf_or_cipher_is_unsupported() {
+        for (i, v) in [(4, 0), (4, 2), (5, 0), (5, 2), (34, 0), (34, 2)] {
+            let mut f = file();
+            f[i] = v;
+            assert!(
+                matches!(Header::parse(&f), Err(Error::UnsupportedVersion)),
+                "byte {i}={v}"
+            );
+        }
+    }
+
+    #[test]
+    fn out_of_range_params_are_rejected() {
+        let hi = KdfParams::CEILING;
+        for kdf in [
+            KdfParams {
+                m_cost_kib: hi.m_cost_kib + 1,
+                ..hi
+            },
+            KdfParams {
+                t_cost: hi.t_cost + 1,
+                ..hi
+            },
+            KdfParams {
+                p_cost: hi.p_cost + 1,
+                ..hi
+            },
+            KdfParams {
+                m_cost_kib: 0,
+                ..hi
+            },
+            KdfParams {
+                m_cost_kib: u32::MAX,
+                t_cost: u32::MAX,
+                p_cost: u32::MAX,
+            },
+        ] {
+            let mut f = Header { kdf, ..sample() }.to_bytes().to_vec();
+            f.extend_from_slice(&[0; TAG_LEN]);
+            assert!(
+                matches!(Header::parse(&f), Err(Error::ParamsOutOfRange)),
+                "{kdf:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn arbitrary_bytes_never_panic() {
+        // Deterministic xorshift so failures reproduce; the fuzz target covers this properly later.
+        let mut x: u64 = 0x9E37_79B9_7F4A_7C15;
+        for _ in 0..10_000 {
+            let mut f = file();
+            for b in &mut f {
+                x ^= x << 13;
+                x ^= x >> 7;
+                x ^= x << 17;
+                if x.is_multiple_of(8) {
+                    *b = x as u8;
+                }
+            }
+            let _ = Header::parse(&f);
+        }
+    }
+}
