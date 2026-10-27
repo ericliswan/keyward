@@ -26,9 +26,10 @@ pub struct KdfParams {
 }
 
 impl KdfParams {
-    /// Production default: RFC 9106 second recommended option (64 MiB, 3 passes, 4 lanes).
+    /// Production default: 256 MiB, 3 passes, 4 lanes, about 0.6 s on an Apple M1
+    /// (see `docs/decisions/0002-kdf-default-parameters.md`).
     pub const PRODUCTION: Self = Self {
-        m_cost_kib: 65_536,
+        m_cost_kib: 262_144,
         t_cost: 3,
         p_cost: 4,
     };
