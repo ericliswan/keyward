@@ -96,6 +96,46 @@ impl Vault {
         }
         Ok(vault)
     }
+
+    /// Returns every entry whose site equals `site`, ignoring case. Several logins for one
+    /// site are allowed, so the caller decides how to pick among them.
+    #[must_use]
+    pub fn find(&self, site: &str) -> Vec<&Entry> {
+        let site = site.to_lowercase();
+        self.entries
+            .iter()
+            .filter(|e| e.site.to_lowercase() == site)
+            .collect()
+    }
+
+    /// Adds an entry and returns its id.
+    pub fn insert(&mut self, entry: Entry) -> Uuid {
+        let id = entry.id;
+        self.entries.push(entry);
+        id
+    }
+
+    /// Applies `change` to the entry with `id` and sets its `updated_at` to `now`.
+    /// Returns `false` if there is no such entry.
+    pub fn update(
+        &mut self,
+        id: Uuid,
+        now: OffsetDateTime,
+        change: impl FnOnce(&mut Entry),
+    ) -> bool {
+        let Some(entry) = self.entries.iter_mut().find(|e| e.id == id) else {
+            return false;
+        };
+        change(entry);
+        entry.updated_at = now;
+        true
+    }
+
+    /// Removes and returns the entry with `id`, if present.
+    pub fn remove(&mut self, id: Uuid) -> Option<Entry> {
+        let i = self.entries.iter().position(|e| e.id == id)?;
+        Some(self.entries.remove(i))
+    }
 }
 
 /// A secret text field (password or notes).
@@ -160,6 +200,39 @@ mod tests {
         assert_eq!(e.password.expose(), "hunter2");
         assert_eq!(e.notes.expose(), "recovery codes");
         assert_eq!(e.updated_at, NOW);
+    }
+
+    #[test]
+    fn find_returns_all_case_insensitive_matches() {
+        let mut vault = Vault::default();
+        let a = vault.insert(entry("Example.com"));
+        let b = vault.insert(entry("example.com"));
+        vault.insert(entry("other.org"));
+        let ids: Vec<Uuid> = vault.find("EXAMPLE.COM").iter().map(|e| e.id).collect();
+        assert_eq!(ids, [a, b]);
+        assert!(vault.find("example").is_empty());
+    }
+
+    #[test]
+    fn update_changes_entry_and_bumps_updated_at() {
+        let mut vault = Vault::default();
+        let id = vault.insert(entry("example.com"));
+        let later = datetime!(2026-10-29 08:30 UTC);
+        assert!(vault.update(id, later, |e| e.username = "bob".to_owned()));
+        let e = &vault.entries[0];
+        assert_eq!(e.username, "bob");
+        assert_eq!(e.created_at, NOW);
+        assert_eq!(e.updated_at, later);
+        assert!(!vault.update(Uuid::nil(), later, |_| {}));
+    }
+
+    #[test]
+    fn remove_by_id() {
+        let mut vault = Vault::default();
+        let id = vault.insert(entry("example.com"));
+        assert_eq!(vault.remove(id).map(|e| e.id), Some(id));
+        assert!(vault.remove(id).is_none());
+        assert!(vault.entries.is_empty());
     }
 
     #[test]
