@@ -38,6 +38,9 @@ pub enum Command {
     Get {
         /// Site or service name.
         site: String,
+        /// Print the password to stdout instead.
+        #[arg(long)]
+        show: bool,
     },
     /// List sites and usernames, never passwords.
     List {
