@@ -24,10 +24,10 @@ fn main() -> Result<(), pwv_core::Error> {
     }
     let profiles = [
         ("floor (OWASP)", KdfParams::PRODUCTION_FLOOR),
-        ("default (RFC 9106 #2)", KdfParams::PRODUCTION),
-        ("default, one lane", params(64, 3, 1)),
+        ("RFC 9106 #2", params(64, 3, 4)),
+        ("RFC 9106 #2, one lane", params(64, 3, 1)),
         ("128 MiB", params(128, 3, 4)),
-        ("256 MiB", params(256, 3, 4)),
+        ("default", KdfParams::PRODUCTION),
         ("512 MiB", params(512, 2, 4)),
     ];
     let password = SecretString::from("benchmark password");
