@@ -260,4 +260,30 @@ mod file_tests {
             assert_eq!(mode, 0o600, "{}", p.display());
         }
     }
+
+    #[test]
+    fn failure_before_rename_leaves_original_intact() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = new_vault(&dir);
+        let original = fs::read(&path).unwrap();
+        // A directory where the backup should go makes the copy fail just before the rename.
+        fs::create_dir(backup_path(&path)).unwrap();
+
+        let mut v = unlock(&path, &password("correct horse")).unwrap();
+        v.vault.insert(Entry::new(
+            "example.com".to_owned(),
+            "alice".to_owned(),
+            SecretText::from("hunter2".to_owned()),
+            SecretText::default(),
+            datetime!(2026-10-28 12:00 UTC),
+        ));
+        assert!(matches!(v.save(), Err(Error::Io(_))));
+
+        assert_eq!(fs::read(&path).unwrap(), original);
+        let names: Vec<_> = fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        assert_eq!(names.len(), 2, "temp file left behind: {names:?}");
+    }
 }
