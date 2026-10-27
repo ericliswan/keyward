@@ -1,6 +1,16 @@
 //! Argon2id key derivation.
 
+use argon2::{Algorithm, Argon2, Version};
+use secrecy::{ExposeSecret, SecretString};
+use zeroize::Zeroizing;
+
 use crate::error::{Error, Result};
+
+/// Salt length in bytes.
+pub const SALT_LEN: usize = 16;
+
+/// Derived key length in bytes (256 bits).
+pub const KEY_LEN: usize = 32;
 
 /// Argon2id cost parameters, stored in the vault header.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -74,4 +84,33 @@ impl Default for KdfParams {
             Self::PRODUCTION
         }
     }
+}
+
+/// Derives a 256-bit key from the master password with Argon2id v0x13.
+///
+/// The parameters are validated first, so the values used are exactly the values
+/// written to the header.
+///
+/// # Errors
+/// Returns [`Error::ParamsOutOfRange`] if `params` fail [`KdfParams::validate`]
+/// or are rejected by Argon2.
+pub fn derive_key(
+    password: &SecretString,
+    salt: &[u8; SALT_LEN],
+    params: &KdfParams,
+) -> Result<Zeroizing<[u8; KEY_LEN]>> {
+    params.validate()?;
+    let argon_params = argon2::Params::new(
+        params.m_cost_kib,
+        params.t_cost,
+        params.p_cost,
+        Some(KEY_LEN),
+    )
+    .map_err(|_| Error::ParamsOutOfRange)?;
+    let argon = Argon2::new(Algorithm::Argon2id, Version::V0x13, argon_params);
+    let mut key = Zeroizing::new([0u8; KEY_LEN]);
+    argon
+        .hash_password_into(password.expose_secret().as_bytes(), salt, key.as_mut())
+        .map_err(|_| Error::ParamsOutOfRange)?;
+    Ok(key)
 }
