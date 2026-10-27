@@ -1,5 +1,6 @@
-//! Tampering, truncation and downgrade tests, run against real vault files through the
-//! public `storage` API. Each test's doc comment names the README claim it proves.
+//! Rejection tests: wrong password, tampering, truncation and downgrade, run against real
+//! vault files through the public `storage` API. Each test's doc comment names the README
+//! claim it proves.
 
 // Every test unlocks vault files, which needs the fast KDF profile.
 #![cfg(feature = "insecure-test-kdf")]
@@ -116,4 +117,37 @@ fn memory_cost_downgrade_is_rejected() {
         unlock_bytes(&below_floor),
         Err(Error::ParamsOutOfRange)
     ));
+}
+
+/// README claim: a wrong password gets the same error as a corrupted file and changes
+/// nothing on disk.
+#[test]
+fn wrong_password_fails_and_leaves_files_unchanged() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("vault.pwv");
+    // The second save creates the `.bak`.
+    storage::create(&path, &password(PASSWORD))
+        .unwrap()
+        .save()
+        .unwrap();
+    let snapshot = || {
+        let mut files: Vec<_> = fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| {
+                let e = e.unwrap();
+                (e.file_name(), fs::read(e.path()).unwrap())
+            })
+            .collect();
+        files.sort();
+        files
+    };
+    let before = snapshot();
+    assert_eq!(before.len(), 2, "expected the vault and its .bak");
+
+    let err = storage::unlock(&path, &password("wrong password"))
+        .map(drop)
+        .unwrap_err();
+    assert!(matches!(err, Error::Decrypt));
+    assert_eq!(err.to_string(), "wrong password or corrupted vault");
+    assert_eq!(snapshot(), before);
 }

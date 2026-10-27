@@ -209,14 +209,6 @@ mod file_tests {
     }
 
     #[test]
-    fn wrong_password_fails_with_decrypt() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = new_vault(&dir);
-        let err = unlock(&path, &password("wrong")).err().unwrap();
-        assert!(matches!(err, Error::Decrypt));
-    }
-
-    #[test]
     fn save_keeps_previous_file_as_bak() {
         let dir = tempfile::tempdir().unwrap();
         let path = new_vault(&dir);
