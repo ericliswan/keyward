@@ -8,9 +8,13 @@ use secrecy::ExposeSecret;
 
 use crate::prompt::Prompter;
 
-pub fn run(path: &Path, prompt: &mut Prompter<impl BufRead>) -> Result<()> {
-    if path.try_exists()? {
-        bail!("a vault already exists at {}", path.display());
+/// With `force`, an existing vault is replaced; `storage` keeps the old file as `<vault>.bak`.
+pub fn run(path: &Path, force: bool, prompt: &mut Prompter<impl BufRead>) -> Result<()> {
+    if !force && path.try_exists()? {
+        bail!(
+            "a vault already exists at {}; pass --force to replace it",
+            path.display()
+        );
     }
     let password = prompt.secret("New master password")?;
     if prompt.secret("Repeat master password")?.expose_secret() != password.expose_secret() {
