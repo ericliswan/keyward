@@ -58,6 +58,27 @@ pub fn create(path: &Path, password: &SecretString) -> Result<UnlockedVault> {
     Ok(unlocked)
 }
 
+/// Reads, authenticates and decrypts the vault at `path`.
+///
+/// The header (including KDF parameters) is validated before Argon2 runs.
+///
+/// # Errors
+/// [`crate::Error::Io`] if the file cannot be read; [`crate::Error::Decrypt`] for a wrong
+/// password or a modified file; other header and schema errors as documented on
+/// [`Header::parse`] and [`Vault::from_json`].
+pub fn unlock(path: &Path, password: &SecretString) -> Result<UnlockedVault> {
+    let bytes = fs::read(path)?;
+    let (header, _) = Header::parse(&bytes)?;
+    let key = kdf::derive_key(password, &header.salt, &header.kdf)?;
+    let vault = Vault::from_json(&crypto::open(&key, &bytes)?)?;
+    Ok(UnlockedVault {
+        path: path.to_owned(),
+        header,
+        key,
+        vault,
+    })
+}
+
 impl UnlockedVault {
     /// Encrypts the vault with a fresh nonce and the same salt, and atomically replaces the file.
     ///
@@ -101,10 +122,14 @@ mod tests {
 }
 
 // Real Argon2 parameters take seconds per vault in debug builds, so file tests need the fast profile.
-#[cfg(all(test, feature = "insecure-test-kdf"))]
+#[cfg(test)]
+#[cfg(feature = "insecure-test-kdf")]
 mod file_tests {
     use super::*;
+    use crate::Error;
     use crate::header::HEADER_LEN;
+    use crate::model::{Entry, SecretText};
+    use time::macros::datetime;
 
     fn password(s: &str) -> SecretString {
         SecretString::from(s.to_owned())
@@ -119,5 +144,53 @@ mod file_tests {
         let (header, _) = Header::parse(&bytes).unwrap();
         assert_eq!(header.kdf, KdfParams::default());
         assert!(bytes.len() > HEADER_LEN);
+    }
+
+    fn new_vault(dir: &tempfile::TempDir) -> PathBuf {
+        let path = dir.path().join("v.pwv");
+        create(&path, &password("correct horse")).unwrap();
+        path
+    }
+
+    #[test]
+    fn saved_entries_survive_unlock() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = new_vault(&dir);
+        let mut v = unlock(&path, &password("correct horse")).unwrap();
+        v.vault.insert(Entry::new(
+            "example.com".to_owned(),
+            "alice".to_owned(),
+            SecretText::from("hunter2".to_owned()),
+            SecretText::default(),
+            datetime!(2026-10-28 12:00 UTC),
+        ));
+        v.save().unwrap();
+
+        let v = unlock(&path, &password("correct horse")).unwrap();
+        assert_eq!(v.vault.find("example.com")[0].password.expose(), "hunter2");
+    }
+
+    #[test]
+    fn wrong_password_fails_with_decrypt() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = new_vault(&dir);
+        let err = unlock(&path, &password("wrong")).err().unwrap();
+        assert!(matches!(err, Error::Decrypt));
+    }
+
+    #[test]
+    fn save_keeps_salt_and_changes_nonce() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = new_vault(&dir);
+        let before = fs::read(&path).unwrap();
+        unlock(&path, &password("correct horse"))
+            .unwrap()
+            .save()
+            .unwrap();
+        let after = fs::read(&path).unwrap();
+        let (h1, _) = Header::parse(&before).unwrap();
+        let (h2, _) = Header::parse(&after).unwrap();
+        assert_eq!(h1.salt, h2.salt);
+        assert_ne!(h1.nonce, h2.nonce);
     }
 }
