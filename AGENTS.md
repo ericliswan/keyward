@@ -12,6 +12,7 @@ Read the whole file before the first command. Work through the milestones **in o
 - **Stop at every 🛑 HUMAN CHECKPOINT.** Post a summary in the PR (or an issue) and wait for the repository owner to reply before merging. These checkpoints exist because the owner must be able to explain every design decision in interviews.
 - **When blocked or unsure** (a library API changed, a requirement is ambiguous, a test can't be made to pass honestly): open an issue labelled `question`, describe the options, and stop. Do not guess on anything touching cryptography or the file format.
 - **Flag tasks that need more reasoning effort.** Before starting a task that would clearly benefit from high or max effort (new crypto or file-format code, 🛑 checkpoint material, security test design, threat-model writing, hard cross-platform bugs), stop and tell the owner which level and why, so they can switch. Routine work (docs edits, dependency bumps, merging green PRs) does not need this.
+- **End every session with a handoff note.** Before the session ends, write `sessions/YYYY-MM-DD.md` (append `-2`, `-3`, … for later sessions that day) summarising what the session did (issues, branches, PRs opened or merged, anything left unpushed, unmerged or waiting on CI) and what the next session should do first. `sessions/` is git-ignored; read the newest note at the start of every session.
 - **Keep this file current.** If a decision changes, update this file in the same PR.
 
 ---
