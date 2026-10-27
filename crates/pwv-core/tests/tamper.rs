@@ -8,8 +8,10 @@
 
 use std::fs;
 
-use pwv_core::header::{HEADER_LEN, TAG_LEN};
-use pwv_core::{Error, storage};
+use pwv_core::header::{HEADER_LEN, Header, NONCE_LEN, TAG_LEN};
+use pwv_core::kdf::{self, KdfParams};
+use pwv_core::model::Vault;
+use pwv_core::{Error, crypto, storage};
 use secrecy::SecretString;
 
 const PASSWORD: &str = "correct horse battery staple";
@@ -74,4 +76,44 @@ fn truncated_empty_and_extended_files_are_rejected() {
     let mut extended = file;
     extended.push(0);
     assert!(matches!(unlock_bytes(&extended), Err(Error::Decrypt)));
+}
+
+/// README claim: lowering the KDF cost in the header does not weaken the vault. Below the
+/// floor it is refused as out of range; within range it fails authentication, because the
+/// parameters are part of the associated data.
+#[test]
+fn memory_cost_downgrade_is_rejected() {
+    let floor = KdfParams::FLOOR;
+    let original = KdfParams {
+        m_cost_kib: floor.m_cost_kib * 4,
+        ..floor
+    };
+    let header = Header {
+        kdf: original,
+        salt: kdf::random_salt(),
+        nonce: [0; NONCE_LEN],
+    };
+    let key = kdf::derive_key(&password(PASSWORD), &header.salt, &original).unwrap();
+    let file = crypto::seal(&key, &header, &Vault::default().to_json().unwrap());
+    unlock_bytes(&file).unwrap();
+
+    let with_m_cost = |m: u32| {
+        let mut f = file.clone();
+        f[6..10].copy_from_slice(&m.to_le_bytes());
+        f
+    };
+
+    // Even the original key cannot open the file once the header says something else.
+    let downgraded = with_m_cost(floor.m_cost_kib);
+    assert!(matches!(
+        crypto::open(&key, &downgraded),
+        Err(Error::Decrypt)
+    ));
+    assert!(matches!(unlock_bytes(&downgraded), Err(Error::Decrypt)));
+
+    let below_floor = with_m_cost(floor.m_cost_kib - 1);
+    assert!(matches!(
+        unlock_bytes(&below_floor),
+        Err(Error::ParamsOutOfRange)
+    ));
 }
