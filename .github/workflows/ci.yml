@@ -32,6 +32,8 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - run: cargo test --workspace --all-features
+      - name: Tests without test-only features
+        run: cargo test --workspace
       - name: Release build excludes test-only features
         run: cargo build --release -p pwv-cli
 
