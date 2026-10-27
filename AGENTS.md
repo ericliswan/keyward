@@ -11,6 +11,7 @@ Read the whole file before the first command. Work through the milestones **in o
 - **Unit of work = one issue → one branch → one PR.** Each PR in Section 8 lists its branch name, suggested commits and acceptance criteria.
 - **Stop at every 🛑 HUMAN CHECKPOINT.** Post a summary in the PR (or an issue) and wait for the repository owner to reply before merging. These checkpoints exist because the owner must be able to explain every design decision in interviews.
 - **When blocked or unsure** (a library API changed, a requirement is ambiguous, a test can't be made to pass honestly): open an issue labelled `question`, describe the options, and stop. Do not guess on anything touching cryptography or the file format.
+- **Flag tasks that need more reasoning effort.** Before starting a task that would clearly benefit from high or max effort (new crypto or file-format code, 🛑 checkpoint material, security test design, threat-model writing, hard cross-platform bugs), stop and tell the owner which level and why, so they can switch. Routine work (docs edits, dependency bumps, merging green PRs) does not need this.
 - **Keep this file current.** If a decision changes, update this file in the same PR.
 
 ---
