@@ -34,3 +34,9 @@ jobs:
       - run: cargo test --workspace --all-features
       - name: Release build excludes test-only features
         run: cargo build --release -p pwv-cli
+
+  supply-chain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
