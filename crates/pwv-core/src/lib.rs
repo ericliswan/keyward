@@ -6,5 +6,6 @@ pub mod error;
 pub mod header;
 pub mod kdf;
 pub mod model;
+pub mod storage;
 
 pub use error::{Error, Result};
