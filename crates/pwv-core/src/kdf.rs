@@ -1,6 +1,8 @@
 //! Argon2id key derivation.
 
 use argon2::{Algorithm, Argon2, Version};
+use rand::TryRng;
+use rand::rngs::SysRng;
 use secrecy::{ExposeSecret, SecretString};
 use zeroize::Zeroizing;
 
@@ -84,6 +86,19 @@ impl Default for KdfParams {
             Self::PRODUCTION
         }
     }
+}
+
+/// Returns a fresh random salt from the OS random number generator.
+///
+/// # Panics
+/// If the operating system's random number generator fails.
+#[must_use]
+pub fn random_salt() -> [u8; SALT_LEN] {
+    let mut salt = [0u8; SALT_LEN];
+    SysRng
+        .try_fill_bytes(&mut salt)
+        .expect("OS random number generator failed");
+    salt
 }
 
 /// Derives a 256-bit key from the master password with Argon2id v0x13.
