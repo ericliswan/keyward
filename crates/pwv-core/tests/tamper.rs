@@ -8,6 +8,7 @@
 
 use std::fs;
 
+use pwv_core::header::{HEADER_LEN, TAG_LEN};
 use pwv_core::{Error, storage};
 use secrecy::SecretString;
 
@@ -52,4 +53,25 @@ fn flipping_any_byte_is_rejected() {
         };
         assert!(expected, "byte {i}: unexpected {err:?}");
     }
+}
+
+/// README claim: a truncated or extended vault file is refused, never partly read.
+///
+/// Covers every length from empty up to one byte short, plus one extra byte at the end.
+#[test]
+fn truncated_empty_and_extended_files_are_rejected() {
+    let file = new_vault_bytes();
+    for len in 0..file.len() {
+        let err = unlock_bytes(&file[..len]).expect_err("truncated vault unlocked");
+        let expected = if len < HEADER_LEN + TAG_LEN {
+            matches!(err, Error::Format)
+        } else {
+            matches!(err, Error::Decrypt)
+        };
+        assert!(expected, "length {len}: unexpected {err:?}");
+    }
+
+    let mut extended = file;
+    extended.push(0);
+    assert!(matches!(unlock_bytes(&extended), Err(Error::Decrypt)));
 }
