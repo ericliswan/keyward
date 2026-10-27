@@ -8,6 +8,8 @@ yanked = "deny"
 [licenses]
 version = 2
 allow = ["MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "Unicode-3.0", "Zlib", "CC0-1.0"]
+# option-ext (via directories -> dirs-sys) is MPL-2.0: file-level copyleft, fine to use unmodified.
+exceptions = [{ allow = ["MPL-2.0"], crate = "option-ext" }]
 
 [bans]
 multiple-versions = "warn"
