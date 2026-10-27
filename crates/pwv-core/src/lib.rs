@@ -2,6 +2,7 @@
 #![forbid(unsafe_code)]
 
 pub mod error;
+pub mod header;
 pub mod kdf;
 
 pub use error::{Error, Result};
