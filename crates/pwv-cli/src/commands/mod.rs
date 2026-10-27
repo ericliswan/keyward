@@ -1,6 +1,7 @@
 //! Subcommand implementations, one module each.
 
 mod add;
+mod delete;
 mod edit;
 mod get;
 mod init;
@@ -35,7 +36,7 @@ pub fn run(cli: Cli) -> Result<()> {
         }
         Command::List { search } => return list::run(&vault, search.as_deref(), &mut prompt),
         Command::Edit { site, field } => return edit::run(&vault, &site, &field, &mut prompt),
-        Command::Delete { .. } => "delete",
+        Command::Delete { site, yes } => return delete::run(&vault, &site, yes, &mut prompt),
         Command::ChangeMaster => "change-master",
         Command::Gen => "gen",
     };

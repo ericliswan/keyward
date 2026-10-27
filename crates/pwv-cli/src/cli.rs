@@ -62,6 +62,9 @@ pub enum Command {
     Delete {
         /// Site or service name.
         site: String,
+        /// Delete without asking for confirmation.
+        #[arg(long)]
+        yes: bool,
     },
     /// Change the master password and re-encrypt the vault with a new salt.
     ChangeMaster,
