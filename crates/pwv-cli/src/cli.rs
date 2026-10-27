@@ -40,7 +40,11 @@ pub enum Command {
         site: String,
     },
     /// List sites and usernames, never passwords.
-    List,
+    List {
+        /// Only entries whose site or username contains TEXT, ignoring case.
+        #[arg(long, value_name = "TEXT")]
+        search: Option<String>,
+    },
     /// Change one field of an entry.
     Edit {
         /// Site or service name.
