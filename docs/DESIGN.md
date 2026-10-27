@@ -89,3 +89,4 @@ The target is an unlock of 0.5–1 s. `cargo run --release --example kdf_bench` 
 - `Decrypt` always reads **"wrong password or corrupted vault"**. The two cases are never distinguished, so the tool gives no oracle about which one happened.
 - No error message, `Debug` output or panic includes secret material: passwords, keys or plaintext.
 - CLI exit codes: `0` success, `1` general or user error, `2` usage error, `3` authentication or integrity failure.
+  Every `pwv-core` error except `Io` exits with `3`: a vault that cannot be parsed, has out-of-range parameters or fails authentication is treated as an integrity failure. A missing or unreadable file exits with `1`.
