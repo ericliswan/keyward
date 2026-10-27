@@ -26,3 +26,8 @@ workspace = true
 [dev-dependencies]
 assert_cmd = "2.2.2"
 predicates = "3.1.4"
+tempfile = "3.27.0"
+
+[features]
+# Forwards pwv-core's fast test KDF so CLI tests run quickly. Never enable in a release build.
+insecure-test-kdf = ["pwv-core/insecure-test-kdf"]

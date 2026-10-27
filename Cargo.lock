@@ -910,6 +910,7 @@ dependencies = [
  "pwv-core",
  "rpassword",
  "secrecy",
+ "tempfile",
  "zeroize",
  "zxcvbn",
 ]
