@@ -1,0 +1,11 @@
+[package]
+name = "pwv-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Vault format, cryptography and storage for the pwv password manager"
+
+[lints]
+workspace = true
