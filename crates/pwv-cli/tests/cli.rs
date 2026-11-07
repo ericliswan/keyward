@@ -418,3 +418,62 @@ fn add_generate_stores_a_generated_password() {
     assert!(password.bytes().all(|b| b.is_ascii_alphanumeric()));
     assert!(!stderr.contains(password));
 }
+
+/// Fails if stdout or stderr contains any of `secrets`. The message names only the stream, so a
+/// failure does not print the secret either.
+fn assert_quiet(assert: &assert_cmd::assert::Assert, secrets: &[&str]) {
+    let out = assert.get_output();
+    for (name, bytes) in [("stdout", &out.stdout), ("stderr", &out.stderr)] {
+        let text = String::from_utf8_lossy(bytes);
+        assert!(
+            !secrets.iter().any(|s| text.contains(s)),
+            "{name} contains a secret"
+        );
+    }
+}
+
+/// Proves: across the whole command set, a secret reaches the terminal only through
+/// `get --show`, and only on stdout.
+#[test]
+#[cfg_attr(
+    not(feature = "insecure-test-kdf"),
+    ignore = "slow production KDF; run with --features insecure-test-kdf"
+)]
+fn full_lifecycle_never_prints_a_secret_unasked() {
+    const NEW: &str = "lantern quiver orchard basalt";
+    let secrets = [MASTER, NEW, "s3cret-mail", "n3w-mail", "pin 4321"];
+    let dir = tempfile::tempdir().unwrap();
+    let vault = dir.path().join("vault.pwv");
+    let quiet = |args: &[&str], answers: &[&str]| {
+        let assert = run(&vault, args, answers).success();
+        assert_quiet(&assert, &secrets);
+        assert
+    };
+    let get = ["get", "mail", "--show", "--force", "--no-clipboard"];
+    let shown = |answers: &[&str], password: &str| {
+        let assert = run(&vault, &get, answers)
+            .success()
+            .stdout(format!("{password}\n"));
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(
+            !secrets.iter().any(|s| stderr.contains(s)),
+            "stderr contains a secret"
+        );
+    };
+
+    quiet(&["init"], &[MASTER, MASTER]);
+    quiet(
+        &["add", "mail"],
+        &[MASTER, "alice", "s3cret-mail", "pin 4321"],
+    );
+    quiet(&["list"], &[MASTER]).stdout("SITE  USERNAME\nmail  alice\n");
+    shown(&[MASTER], "s3cret-mail");
+    quiet(&["edit", "mail", "--password"], &[MASTER, "n3w-mail"]);
+    shown(&[MASTER], "n3w-mail");
+    quiet(&["change-master"], &[MASTER, NEW, NEW]);
+    let old = run(&vault, &["list"], &[MASTER]).code(3);
+    assert_quiet(&old, &secrets);
+    shown(&[NEW], "n3w-mail");
+    quiet(&["delete", "mail", "--yes"], &[NEW]);
+    quiet(&["list"], &[NEW]).stdout("");
+}
