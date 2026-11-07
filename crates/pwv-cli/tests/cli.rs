@@ -309,3 +309,100 @@ fn change_master_switches_the_password() {
     assert_eq!(fs::read(&bak).unwrap(), before);
     pwv_core::storage::unlock(&bak, &SecretString::from(MASTER)).unwrap();
 }
+
+#[test]
+fn gen_prints_only_the_password_on_stdout() {
+    let out = pwv().arg("gen").assert().success();
+    let out = out.get_output();
+    let stdout = String::from_utf8(out.stdout.clone()).unwrap();
+    let password = stdout.strip_suffix('\n').unwrap();
+    assert_eq!(password.len(), 20);
+    assert!(!password.contains('\n'));
+    let stderr = String::from_utf8(out.stderr.clone()).unwrap();
+    assert!(stderr.contains("Estimated entropy: 131 bits"), "{stderr}");
+    assert!(!stderr.contains(password));
+
+    let out = pwv()
+        .args(["gen", "--length", "40", "--no-upper", "--no-symbols"])
+        .assert()
+        .success();
+    let stdout = String::from_utf8(out.get_output().stdout.clone()).unwrap();
+    let password = stdout.trim_end();
+    assert_eq!(password.len(), 40);
+    assert!(
+        password
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
+    );
+
+    let out = pwv().args(["gen", "--passphrase", "5"]).assert().success();
+    let stdout = String::from_utf8(out.get_output().stdout.clone()).unwrap();
+    assert!(stdout.trim_end().split('-').count() >= 5);
+}
+
+#[test]
+fn gen_rejects_bad_options() {
+    pwv()
+        .args(["gen", "--length", "4"])
+        .assert()
+        .code(1)
+        .stdout("")
+        .stderr(predicate::str::contains("between 8 and 256"));
+    pwv()
+        .args([
+            "gen",
+            "--no-lower",
+            "--no-upper",
+            "--no-digits",
+            "--no-symbols",
+        ])
+        .assert()
+        .code(1);
+    pwv().args(["gen", "--passphrase", "3"]).assert().code(1);
+    pwv()
+        .args(["gen", "--passphrase", "5", "--length", "30"])
+        .assert()
+        .code(2);
+}
+
+#[test]
+#[cfg_attr(
+    not(feature = "insecure-test-kdf"),
+    ignore = "slow production KDF; run with --features insecure-test-kdf"
+)]
+fn add_generate_stores_a_generated_password() {
+    let dir = tempfile::tempdir().unwrap();
+    let vault = dir.path().join("vault.pwv");
+    init(&vault, &[MASTER, MASTER], &[]).success();
+
+    // Generator options without --generate are refused before anything is asked.
+    run(&vault, &["add", "mail", "--length", "32"], &[])
+        .code(1)
+        .stderr(predicate::str::contains("need --generate"));
+
+    // Only master password, username and notes are asked for.
+    let out = run(
+        &vault,
+        &[
+            "add",
+            "mail",
+            "--generate",
+            "--length",
+            "32",
+            "--no-symbols",
+        ],
+        &[MASTER, "alice", ""],
+    )
+    .success()
+    .stdout("")
+    .stderr(predicate::str::contains("generated password"));
+    let stderr = String::from_utf8(out.get_output().stderr.clone()).unwrap();
+
+    let unlocked = pwv_core::storage::unlock(&vault, &SecretString::from(MASTER)).unwrap();
+    let entry = unlocked.vault.find("mail")[0];
+    let password = entry.password.expose();
+    assert_eq!(entry.username, "alice");
+    assert_eq!(password.len(), 32);
+    assert!(password.bytes().all(|b| b.is_ascii_alphanumeric()));
+    assert!(!stderr.contains(password));
+}
