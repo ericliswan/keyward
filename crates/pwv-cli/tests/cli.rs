@@ -513,3 +513,58 @@ fn wrong_password_exits_3_and_changes_nothing() {
     }
     assert_eq!((fs::read(&vault).unwrap(), fs::read(&bak).unwrap()), before);
 }
+
+/// Proves: a tampered, truncated, extended or foreign file exits 3 and prints nothing on stdout.
+/// Damage after the header gets the same message as a wrong password.
+#[test]
+#[cfg_attr(
+    not(feature = "insecure-test-kdf"),
+    ignore = "slow production KDF; run with --features insecure-test-kdf"
+)]
+fn tampered_truncated_or_foreign_files_exit_3() {
+    let dir = tempfile::tempdir().unwrap();
+    let vault = dir.path().join("vault.pwv");
+    init(&vault, &[MASTER, MASTER], &[]).success();
+    run(&vault, &["add", "mail"], &[MASTER, "alice", "s3cret", ""]).success();
+    let good = fs::read(&vault).unwrap();
+    let flip = |i: usize| {
+        let mut bytes = good.clone();
+        bytes[i] ^= 0x01;
+        bytes
+    };
+    let generic = "wrong password or corrupted vault";
+
+    let cases: Vec<(&str, Vec<u8>, Option<&str>)> = vec![
+        ("m_cost byte", flip(6), None),
+        ("nonce byte", flip(40), Some(generic)),
+        ("ciphertext byte", flip(60), Some(generic)),
+        ("tag byte", flip(good.len() - 1), Some(generic)),
+        (
+            "cut by one byte",
+            good[..good.len() - 1].to_vec(),
+            Some(generic),
+        ),
+        (
+            "one byte appended",
+            [&good[..], &[0]].concat(),
+            Some(generic),
+        ),
+        ("header only", good[..59].to_vec(), None),
+        ("cut inside the header", good[..58].to_vec(), None),
+        ("empty", Vec::new(), None),
+        ("foreign file", b"not a vault".to_vec(), None),
+    ];
+    for (name, bytes, message) in cases {
+        fs::write(&vault, bytes).unwrap();
+        let assert = run(&vault, &["list"], &[MASTER]);
+        let out = assert.get_output();
+        assert_eq!(out.status.code(), Some(3), "{name}");
+        assert!(out.stdout.is_empty(), "{name}");
+        if let Some(message) = message {
+            assert!(
+                String::from_utf8_lossy(&out.stderr).contains(message),
+                "{name}"
+            );
+        }
+    }
+}
