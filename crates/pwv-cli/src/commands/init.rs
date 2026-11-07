@@ -19,14 +19,20 @@ pub fn run(path: &Path, force: bool, prompt: &mut Prompter<impl BufRead>) -> Res
             path.display()
         );
     }
+    let password = new_master_password(prompt)?;
+    pwv_core::storage::create(path, &password)?;
+    eprintln!("Created vault at {}", path.display());
+    Ok(())
+}
+
+/// Asks twice for a new master password that passes [`check_strength`].
+pub(super) fn new_master_password(prompt: &mut Prompter<impl BufRead>) -> Result<SecretString> {
     let password = prompt.secret("New master password")?;
     check_strength(&password)?;
     if prompt.secret("Repeat master password")?.expose_secret() != password.expose_secret() {
         bail!("passwords do not match");
     }
-    pwv_core::storage::create(path, &password)?;
-    eprintln!("Created vault at {}", path.display());
-    Ok(())
+    Ok(password)
 }
 
 /// Rejects master passwords shorter than [`MIN_LEN`] characters or with a zxcvbn score below 3.
