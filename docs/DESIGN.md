@@ -102,3 +102,11 @@ The target is an unlock of 0.5–1 s. `cargo run --release --example kdf_bench` 
 - **Entropy** is reported exactly: `log2` of the number of passwords that contain every class, by inclusion–exclusion. That is slightly below `length · log2(alphabet)`.
 - **Passphrases:** 4 to 64 words from the EFF large wordlist (7776 words, about 12.9 bits each), joined with `-`. Four list words contain a hyphen (`drop-down`, `felt-tip`, `t-shirt`, `yo-yo`), which costs a negligible amount of entropy.
 - A chi-squared test over 1 024 000 characters (seeded, so deterministic) checks the selection is uniform at p > 0.001.
+
+## Clipboard
+
+- `pwv get` copies the password and counts down on stderr (30 s, `--timeout`). `--show` also prints it; `--show --no-clipboard` only prints. The clipboard is opened before the master password is asked for, so a machine without one fails before any KDF work.
+- **Clear only if unchanged.** At copy time `pwv` keeps the SHA-256 fingerprint (`pwv_core::crypto::fingerprint`) and wipes the vault. At the end it reads the clipboard and clears it only if the fingerprint still matches, so anything the user copied since is left alone. If the clipboard can't be read (empty, or holding an image), it is left alone too.
+- **Ctrl-C** (and SIGTERM or SIGHUP) clears at once. The handler only sets a flag, and the countdown checks it every 100 ms. The handler is installed after the prompts, so Ctrl-C at a prompt still just quits. `kill -9`, a crash or a power cut leave the password on the clipboard.
+- **History.** The copy carries each platform's "don't record this" hint: the nspasteboard.org concealed type on macOS, exclude-from-monitoring (history and cloud clipboard) on Windows, and KDE's `x-kde-passwordManagerHint` on Linux. These are conventions that a history tool may ignore. Wayland-only sessions without XWayland are not supported.
+- Tests use an in-memory `Clipboard` and an injected sleep; no test touches the real clipboard.

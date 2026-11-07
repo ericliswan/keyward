@@ -18,7 +18,7 @@ This is a draft written before any code. The final version, with each claim link
 | Header downgrade | Lower the KDF parameters to speed up guessing, or raise them to exhaust memory | Parameters are authenticated, and checked against a floor and ceiling before Argon2 runs | In scope |
 | Rollback | Replace the vault with an older valid copy | Not detectable without external state | Known limitation |
 | Shoulder-surfer | Watch the screen | Hidden password prompts; `get` copies to the clipboard instead of printing; `--show` is opt-in | In scope |
-| Clipboard reader | Read the clipboard or clipboard history | Clipboard cleared after 30 s if unchanged; excluded from history where the OS allows it | Partly mitigated |
+| Clipboard reader | Read the clipboard or clipboard history | Clipboard cleared after 30 s (or on Ctrl-C) if unchanged; copies carry each platform's exclude-from-history hint | Partly mitigated |
 | Metadata observer | See file size and modification time | None; size reveals roughly how much is stored | Known limitation |
 | Local malware or keylogger | Run as the user while the vault is unlocked | None | Out of scope |
 | Root or OS compromise | Read memory, swap or the terminal | None | Out of scope |
@@ -46,7 +46,8 @@ This is a draft written before any code. The final version, with each claim link
 ## Known limitations
 
 - Rollback to an older valid vault is undetectable.
-- Clipboard history and clipboard managers may keep copies.
+- Clipboard history and clipboard managers may keep copies; the exclude-from-history hints are conventions, not enforced. Any program can read the clipboard during the countdown.
+- Killing `pwv` with `SIGKILL`, or a crash, during the countdown leaves the password on the clipboard.
 - Copies of secrets made by `serde_json`, the terminal, the clipboard or the OS cannot all be wiped.
 - File size and modification time are visible.
 - Changing the master password does not re-encrypt older copies. `<vault>.bak` still opens with the old password until the next save, and so do any copies the user made. `pwv change-master` says so; delete them if the old password may have leaked.
