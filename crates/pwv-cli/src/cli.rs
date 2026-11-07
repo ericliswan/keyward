@@ -68,8 +68,38 @@ pub enum Command {
     },
     /// Change the master password and re-encrypt the vault with a new salt.
     ChangeMaster,
-    /// Print a generated password.
-    Gen,
+    /// Print a generated password to stdout and its estimated entropy to stderr.
+    Gen(#[command(flatten)] GenArgs),
+}
+
+/// Generator options, shared by `pwv gen` and `pwv add --generate`.
+#[derive(Debug, Default, PartialEq, Eq, Args)]
+pub struct GenArgs {
+    /// Password length, 8 to 256 [default: 20].
+    #[arg(long, value_name = "N")]
+    pub length: Option<usize>,
+    /// Leave out lowercase letters.
+    #[arg(long)]
+    pub no_lower: bool,
+    /// Leave out uppercase letters.
+    #[arg(long)]
+    pub no_upper: bool,
+    /// Leave out digits.
+    #[arg(long)]
+    pub no_digits: bool,
+    /// Leave out symbols.
+    #[arg(long)]
+    pub no_symbols: bool,
+    /// Leave out look-alike characters: 0 O 1 l I.
+    #[arg(long)]
+    pub no_ambiguous: bool,
+    /// Generate a passphrase of WORDS words (4 to 64) from the EFF wordlist instead.
+    #[arg(
+        long,
+        value_name = "WORDS",
+        conflicts_with_all = ["length", "no_lower", "no_upper", "no_digits", "no_symbols", "no_ambiguous"],
+    )]
+    pub passphrase: Option<usize>,
 }
 
 /// The entry field `pwv edit` changes; exactly one per run.

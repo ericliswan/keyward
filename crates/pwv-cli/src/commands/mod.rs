@@ -4,6 +4,7 @@ mod add;
 mod change_master;
 mod delete;
 mod edit;
+mod r#gen;
 mod get;
 mod init;
 mod list;
@@ -27,21 +28,22 @@ pub fn run(cli: Cli) -> Result<()> {
         password_stdin,
         command,
     } = cli;
+    // `gen` needs no vault.
+    if let Command::Gen(args) = &command {
+        return r#gen::run(args);
+    }
     let vault = vault_path(vault)?;
     let mut prompt = Prompter::stdin(password_stdin);
-    let name = match command {
-        Command::Init { force } => return init::run(&vault, force, &mut prompt),
-        Command::Add { site } => return add::run(&vault, site, &mut prompt),
-        Command::Get { site, show, force } => {
-            return get::run(&vault, &site, show, force, &mut prompt);
-        }
-        Command::List { search } => return list::run(&vault, search.as_deref(), &mut prompt),
-        Command::Edit { site, field } => return edit::run(&vault, &site, &field, &mut prompt),
-        Command::Delete { site, yes } => return delete::run(&vault, &site, yes, &mut prompt),
-        Command::ChangeMaster => return change_master::run(&vault, &mut prompt),
-        Command::Gen => "gen",
-    };
-    bail!("`pwv {name}` is not implemented yet")
+    match command {
+        Command::Init { force } => init::run(&vault, force, &mut prompt),
+        Command::Add { site } => add::run(&vault, site, &mut prompt),
+        Command::Get { site, show, force } => get::run(&vault, &site, show, force, &mut prompt),
+        Command::List { search } => list::run(&vault, search.as_deref(), &mut prompt),
+        Command::Edit { site, field } => edit::run(&vault, &site, &field, &mut prompt),
+        Command::Delete { site, yes } => delete::run(&vault, &site, yes, &mut prompt),
+        Command::ChangeMaster => change_master::run(&vault, &mut prompt),
+        Command::Gen(_) => unreachable!("handled above"),
+    }
 }
 
 /// `--vault` or `PWV_VAULT` if given, otherwise the OS default.
