@@ -666,7 +666,8 @@ git cliff --tag v0.1.0 -o CHANGELOG.md     # included in that same PR
 git tag -a v0.1.0 -m "v0.1.0 — crypto core"
 git push origin v0.1.0
 ```
-- Before cargo-dist exists (v0.1, v0.5): create the GitHub release with `gh release create v0.1.0 --notes-file <section of CHANGELOG>`.
+- Release notes, tag messages and `CHANGELOG.md` are plain professional text: no emojis or decorative symbols. Open with a one- or two-sentence summary of what the release delivers, then the changelog sections (`cliff.toml` groups use plain headings such as "Features" and "Maintenance").
+- Before cargo-dist exists (v0.1, v0.5): create the GitHub release with `gh release create v0.1.0 --notes-file <summary + section of CHANGELOG>`.
 - From v1.0: pushing the tag triggers `release.yml`; verify the release page lists all binaries and checksums.
 - Semantic Versioning: file-format changes that old versions can't read are a **major** bump (after 1.0) and must include a migration path.
 
