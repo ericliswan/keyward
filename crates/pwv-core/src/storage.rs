@@ -41,12 +41,7 @@ pub struct UnlockedVault {
 /// # Errors
 /// [`crate::Error::Io`] if the file cannot be written; KDF errors from [`kdf::derive_key`].
 pub fn create(path: &Path, password: &SecretString) -> Result<UnlockedVault> {
-    let header = Header {
-        kdf: KdfParams::default(),
-        salt: kdf::random_salt(),
-        nonce: [0; NONCE_LEN], // replaced by `crypto::seal` on every save
-    };
-    let key = kdf::derive_key(password, &header.salt, &header.kdf)?;
+    let (header, key) = new_key(password)?;
     fs::create_dir_all(parent_dir(path))?;
     let unlocked = UnlockedVault {
         path: path.to_owned(),
@@ -79,6 +74,18 @@ pub fn unlock(path: &Path, password: &SecretString) -> Result<UnlockedVault> {
     })
 }
 
+/// A header with a fresh salt and the default KDF parameters, and the key `password` derives
+/// from it. Used for a new vault and for a new master password.
+fn new_key(password: &SecretString) -> Result<(Header, Zeroizing<[u8; KEY_LEN]>)> {
+    let header = Header {
+        kdf: KdfParams::default(),
+        salt: kdf::random_salt(),
+        nonce: [0; NONCE_LEN], // replaced by `crypto::seal` on every save
+    };
+    let key = kdf::derive_key(password, &header.salt, &header.kdf)?;
+    Ok((header, key))
+}
+
 impl UnlockedVault {
     /// Encrypts the vault with a fresh nonce and the same salt, and atomically replaces the file.
     ///
@@ -87,6 +94,25 @@ impl UnlockedVault {
     pub fn save(&self) -> Result<()> {
         let file = crypto::seal(&self.key, &self.header, &self.vault.to_json()?);
         write_atomic(&self.path, &file)?;
+        Ok(())
+    }
+
+    /// Re-encrypts the vault under `password` with a fresh salt and the current default KDF
+    /// parameters, and atomically replaces the file. The previous file, still openable with the
+    /// old password, becomes `<vault>.bak` as on every save.
+    ///
+    /// The new key replaces the old one only once the file is written, so after an error this
+    /// value and the file on disk both still use the old password.
+    ///
+    /// # Errors
+    /// KDF errors from [`kdf::derive_key`]; [`crate::Error::Io`] if writing fails, leaving the
+    /// previous file untouched.
+    pub fn change_password(&mut self, password: &SecretString) -> Result<()> {
+        let (header, key) = new_key(password)?;
+        let file = crypto::seal(&key, &header, &self.vault.to_json()?);
+        write_atomic(&self.path, &file)?;
+        self.header = header;
+        self.key = key;
         Ok(())
     }
 }
@@ -261,5 +287,68 @@ mod file_tests {
             .map(|e| e.unwrap().file_name())
             .collect();
         assert_eq!(names.len(), 2, "temp file left behind: {names:?}");
+    }
+
+    fn salt_of(path: &Path) -> [u8; kdf::SALT_LEN] {
+        Header::parse(&fs::read(path).unwrap()).unwrap().0.salt
+    }
+
+    /// Proves: after `change-master` the old password no longer opens the vault, the salt is new,
+    /// entries survive, and `.bak` holds the previous file.
+    #[test]
+    fn change_password_rekeys_with_a_new_salt() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = new_vault(&dir);
+        let mut v = unlock(&path, &password("correct horse")).unwrap();
+        v.vault.insert(Entry::new(
+            "example.com".to_owned(),
+            "alice".to_owned(),
+            SecretText::from("hunter2".to_owned()),
+            SecretText::default(),
+            datetime!(2026-11-08 12:00 UTC),
+        ));
+        v.save().unwrap();
+        let before = fs::read(&path).unwrap();
+
+        v.change_password(&password("battery staple")).unwrap();
+
+        assert_ne!(salt_of(&path), Header::parse(&before).unwrap().0.salt);
+        assert!(matches!(
+            unlock(&path, &password("correct horse")),
+            Err(Error::Decrypt)
+        ));
+        let reopened = unlock(&path, &password("battery staple")).unwrap();
+        assert_eq!(
+            reopened.vault.find("example.com")[0].password.expose(),
+            "hunter2"
+        );
+        assert_eq!(fs::read(backup_path(&path)).unwrap(), before);
+        unlock(&backup_path(&path), &password("correct horse")).unwrap();
+
+        // Later saves keep the new key and salt.
+        let salt = salt_of(&path);
+        v.save().unwrap();
+        assert_eq!(salt_of(&path), salt);
+        unlock(&path, &password("battery staple")).unwrap();
+    }
+
+    #[test]
+    fn failed_change_password_keeps_the_old_password() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = new_vault(&dir);
+        let original = fs::read(&path).unwrap();
+        fs::create_dir(backup_path(&path)).unwrap();
+
+        let mut v = unlock(&path, &password("correct horse")).unwrap();
+        assert!(matches!(
+            v.change_password(&password("battery staple")),
+            Err(Error::Io(_))
+        ));
+        assert_eq!(fs::read(&path).unwrap(), original);
+
+        // The in-memory key was not switched either: a later save still uses the old password.
+        fs::remove_dir(backup_path(&path)).unwrap();
+        v.save().unwrap();
+        unlock(&path, &password("correct horse")).unwrap();
     }
 }
