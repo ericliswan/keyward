@@ -17,7 +17,7 @@ use pwv_core::model::{Entry, SecretText, Vault};
 use pwv_core::storage::UnlockedVault;
 use secrecy::{ExposeSecret, SecretString};
 
-use crate::cli::{Cli, Command};
+use crate::cli::{Cli, Command, GenArgs};
 
 use crate::prompt::Prompter;
 
@@ -36,7 +36,17 @@ pub fn run(cli: Cli) -> Result<()> {
     let mut prompt = Prompter::stdin(password_stdin);
     match command {
         Command::Init { force } => init::run(&vault, force, &mut prompt),
-        Command::Add { site } => add::run(&vault, site, &mut prompt),
+        Command::Add {
+            site,
+            generate,
+            gen_args,
+        } => {
+            let generate = generate.then_some(&gen_args);
+            if generate.is_none() && gen_args != GenArgs::default() {
+                bail!("generator options need --generate");
+            }
+            add::run(&vault, site, generate, &mut prompt)
+        }
         Command::Get { site, show, force } => get::run(&vault, &site, show, force, &mut prompt),
         Command::List { search } => list::run(&vault, search.as_deref(), &mut prompt),
         Command::Edit { site, field } => edit::run(&vault, &site, &field, &mut prompt),

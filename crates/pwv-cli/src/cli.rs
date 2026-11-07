@@ -33,6 +33,12 @@ pub enum Command {
     Add {
         /// Site or service name.
         site: String,
+        /// Store a generated password instead of prompting for one. Takes the same options as
+        /// `pwv gen`.
+        #[arg(long)]
+        generate: bool,
+        #[command(flatten)]
+        gen_args: GenArgs,
     },
     /// Copy an entry's password to the clipboard.
     Get {
