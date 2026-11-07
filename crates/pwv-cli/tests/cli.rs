@@ -268,3 +268,44 @@ fn get_edit_and_delete_choose_among_matching_entries() {
     run(&vault, &["delete", "mail", "--yes"], &[MASTER]).success();
     run(&vault, &["list"], &[MASTER]).stdout("");
 }
+
+/// Proves: `change-master` needs the current password, rejects weak or mismatched new ones
+/// without touching the file, and afterwards only the new password opens the vault.
+#[test]
+#[cfg_attr(
+    not(feature = "insecure-test-kdf"),
+    ignore = "slow production KDF; run with --features insecure-test-kdf"
+)]
+fn change_master_switches_the_password() {
+    const NEW: &str = "lantern quiver orchard basalt";
+    let dir = tempfile::tempdir().unwrap();
+    let vault = dir.path().join("vault.pwv");
+    init(&vault, &[MASTER, MASTER], &[]).success();
+    run(&vault, &["add", "mail"], &[MASTER, "alice", "s3cret", ""]).success();
+    let before = fs::read(&vault).unwrap();
+    let contains = predicate::str::contains;
+
+    run(&vault, &["change-master"], &["wrong password", NEW, NEW]).code(3);
+    run(&vault, &["change-master"], &[MASTER, "short", "short"])
+        .code(1)
+        .stderr(contains("at least 12"));
+    run(&vault, &["change-master"], &[MASTER, NEW, "lantern quiver"])
+        .code(1)
+        .stderr(contains("do not match"));
+    assert_eq!(fs::read(&vault).unwrap(), before);
+
+    run(&vault, &["change-master"], &[MASTER, NEW, NEW])
+        .success()
+        .stdout("")
+        .stderr(contains(".bak").and(contains("lantern").not()));
+
+    run(&vault, &["list"], &[MASTER])
+        .code(3)
+        .stderr(contains("wrong password or corrupted vault"));
+    run(&vault, &["list"], &[NEW])
+        .success()
+        .stdout("SITE  USERNAME\nmail  alice\n");
+    let bak = dir.path().join("vault.pwv.bak");
+    assert_eq!(fs::read(&bak).unwrap(), before);
+    pwv_core::storage::unlock(&bak, &SecretString::from(MASTER)).unwrap();
+}
