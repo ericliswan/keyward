@@ -1,4 +1,5 @@
-//! Authenticated encryption of the vault body with XChaCha20-Poly1305.
+//! Authenticated encryption of the vault body with XChaCha20-Poly1305, and the SHA-256
+//! fingerprint the CLI uses to recognise its own clipboard contents.
 //!
 //! The whole 59-byte header is the associated data, so changing any header byte
 //! (including the KDF parameters or salt) makes decryption fail.
@@ -7,6 +8,7 @@ use chacha20poly1305::XChaCha20Poly1305;
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use rand::TryRng;
 use rand::rngs::SysRng;
+use sha2::{Digest, Sha256};
 use zeroize::Zeroizing;
 
 use crate::error::{Error, Result};
@@ -56,6 +58,15 @@ pub fn open(key: &[u8; KEY_LEN], file: &[u8]) -> Result<Zeroizing<Vec<u8>>> {
         )
         .map(Zeroizing::new)
         .map_err(|_| Error::Decrypt)
+}
+
+/// SHA-256 of `data`.
+///
+/// Lets the CLI check whether the clipboard still holds a password it copied without keeping
+/// the password itself in memory while it waits.
+#[must_use]
+pub fn fingerprint(data: &[u8]) -> [u8; 32] {
+    Sha256::digest(data).into()
 }
 
 #[cfg(test)]
@@ -144,5 +155,14 @@ mod tests {
             bad[i] ^= 1;
             assert!(matches!(open(&KEY, &bad), Err(Error::Decrypt)));
         }
+    }
+
+    #[test]
+    fn fingerprint_is_sha256() {
+        // FIPS 180-2 Appendix B.1.
+        assert_eq!(
+            fingerprint(b"abc"),
+            hex_literal::hex!("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+        );
     }
 }
