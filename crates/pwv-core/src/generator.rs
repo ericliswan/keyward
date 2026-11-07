@@ -115,6 +115,54 @@ impl PasswordOptions {
         }
         Ok(classes)
     }
+
+    /// Entropy in bits of a password from [`password`] with these options.
+    ///
+    /// Exact for a uniform choice among all passwords that contain every enabled class, which is
+    /// what rejection sampling produces.
+    ///
+    /// # Errors
+    /// [`GenError`] if the options are out of range.
+    pub fn entropy_bits(&self) -> Result<f64, GenError> {
+        let sizes: Vec<usize> = self.classes()?.iter().map(Vec::len).collect();
+        Ok(class_entropy_bits(&sizes, self.length))
+    }
+}
+
+/// `log2` of the number of `length`-character strings over the union of disjoint classes with
+/// these sizes that contain every class at least once.
+///
+/// Inclusion–exclusion: `count = Σ over subsets S of (−1)^|S| · (A − |S's characters|)^length`.
+/// Factoring out `A^length` keeps the terms in `[0, 1]` so nothing overflows at length 256.
+fn class_entropy_bits(sizes: &[usize], length: usize) -> f64 {
+    let alphabet: usize = sizes.iter().sum();
+    let a = alphabet as f64;
+    let len = i32::try_from(length).unwrap_or(i32::MAX);
+    let mut fraction = 0.0;
+    for mask in 0..(1u32 << sizes.len()) {
+        let missing: usize = (0..sizes.len())
+            .filter(|i| mask & (1 << i) != 0)
+            .map(|i| sizes[i])
+            .sum();
+        let term = ((alphabet - missing) as f64 / a).powi(len);
+        fraction += if mask.count_ones() % 2 == 0 {
+            term
+        } else {
+            -term
+        };
+    }
+    length as f64 * a.log2() + fraction.log2()
+}
+
+/// Entropy in bits of a passphrase from [`passphrase`] with this many words.
+///
+/// # Errors
+/// [`GenError::Words`] if `words` is out of range.
+pub fn passphrase_entropy_bits(words: usize) -> Result<f64, GenError> {
+    if !(MIN_WORDS..=MAX_WORDS).contains(&words) {
+        return Err(GenError::Words);
+    }
+    Ok(words as f64 * (WORDS.len() as f64).log2())
 }
 
 /// A random password drawn from the OS random number generator, containing at least one
@@ -236,6 +284,25 @@ mod tests {
         for words in [0, MIN_WORDS - 1, MAX_WORDS + 1] {
             assert_eq!(passphrase(words).unwrap_err(), GenError::Words);
         }
+    }
+
+    #[test]
+    fn class_entropy_matches_brute_force() {
+        // Classes {a} and {b, c}, length 3: 27 strings, minus 8 without `a`, minus 1 without
+        // `b`/`c`, leaves 18.
+        assert!((class_entropy_bits(&[1, 2], 3) - 18f64.log2()).abs() < 1e-12);
+        // One class: no constraint, so plain `length · log2(size)`.
+        assert!((class_entropy_bits(&[26], 20) - 20.0 * 26f64.log2()).abs() < 1e-9);
+    }
+
+    #[test]
+    fn entropy_of_the_defaults() {
+        let bits = PasswordOptions::default().entropy_bits().unwrap();
+        // Slightly below 20 · log2(94) ≈ 131.1 because every class must appear.
+        assert!(bits > 130.0 && bits < 20.0 * 94f64.log2(), "{bits}");
+        let words = passphrase_entropy_bits(6).unwrap();
+        assert!((words - 6.0 * 7776f64.log2()).abs() < 1e-9);
+        assert_eq!(passphrase_entropy_bits(3).unwrap_err(), GenError::Words);
     }
 
     #[test]
