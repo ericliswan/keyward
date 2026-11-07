@@ -94,7 +94,8 @@ impl PasswordOptions {
     }
 }
 
-/// A random password drawn from the OS random number generator.
+/// A random password drawn from the OS random number generator, containing at least one
+/// character from every enabled class.
 ///
 /// # Errors
 /// [`GenError`] if the options are out of range.
@@ -110,14 +111,25 @@ fn password_with<R: Rng + ?Sized>(
     rng: &mut R,
     options: &PasswordOptions,
 ) -> Result<SecretText, GenError> {
-    let alphabet = options.classes()?.concat();
+    let classes = options.classes()?;
+    let alphabet = classes.concat();
     // ASCII only, so `length` bytes never reallocate and leave an unwiped copy behind.
     let mut out = Zeroizing::new(String::with_capacity(options.length));
-    for _ in 0..options.length {
-        let &b = alphabet.choose(rng).ok_or(GenError::NoClasses)?;
-        out.push(char::from(b));
+    // Rejection sampling: redraw the whole password until every enabled class appears. Patching
+    // in a missing class at a chosen position would make the positions non-uniform.
+    loop {
+        out.clear();
+        for _ in 0..options.length {
+            let &b = alphabet.choose(rng).ok_or(GenError::NoClasses)?;
+            out.push(char::from(b));
+        }
+        if classes
+            .iter()
+            .all(|class| out.bytes().any(|b| class.contains(&b)))
+        {
+            return Ok(SecretText::from(std::mem::take(&mut *out)));
+        }
     }
-    Ok(SecretText::from(std::mem::take(&mut *out)))
 }
 
 #[cfg(test)]
@@ -129,6 +141,21 @@ mod tests {
         let pw = password(&PasswordOptions::default()).unwrap();
         assert_eq!(pw.expose().len(), DEFAULT_LENGTH);
         assert!(pw.expose().bytes().all(|b| b.is_ascii_graphic()));
+    }
+
+    #[test]
+    fn every_enabled_class_appears_even_at_minimum_length() {
+        let o = PasswordOptions {
+            length: MIN_LENGTH,
+            ..PasswordOptions::default()
+        };
+        let classes = o.classes().unwrap();
+        for _ in 0..1000 {
+            let pw = password(&o).unwrap();
+            for class in &classes {
+                assert!(pw.expose().bytes().any(|b| class.contains(&b)));
+            }
+        }
     }
 
     #[test]
