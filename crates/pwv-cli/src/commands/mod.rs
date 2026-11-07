@@ -1,6 +1,7 @@
 //! Subcommand implementations, one module each.
 
 mod add;
+mod change_master;
 mod delete;
 mod edit;
 mod get;
@@ -37,7 +38,7 @@ pub fn run(cli: Cli) -> Result<()> {
         Command::List { search } => return list::run(&vault, search.as_deref(), &mut prompt),
         Command::Edit { site, field } => return edit::run(&vault, &site, &field, &mut prompt),
         Command::Delete { site, yes } => return delete::run(&vault, &site, yes, &mut prompt),
-        Command::ChangeMaster => "change-master",
+        Command::ChangeMaster => return change_master::run(&vault, &mut prompt),
         Command::Gen => "gen",
     };
     bail!("`pwv {name}` is not implemented yet")
