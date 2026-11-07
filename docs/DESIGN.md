@@ -45,6 +45,7 @@ All integers are little-endian.
 
 - The **salt** changes only on `init` and `change-master`. The **nonce** is generated with the OS random number generator on every save; 24 random bytes make a repeat negligible.
 - Saving writes a temporary file in the same directory and renames it over the vault, so a crash never leaves a half-written vault. The previous version is kept as `<vault>.bak`.
+- `change-master` re-encrypts under a new salt and the current default KDF parameters, so it also upgrades vaults made with older defaults. Its `.bak` is the previous file, still under the old password.
 - Any change to this layout bumps `format_version` and needs a new ADR.
 
 ### Parsing order
