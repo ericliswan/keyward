@@ -91,3 +91,14 @@ The target is an unlock of 0.5–1 s. `cargo run --release --example kdf_bench` 
 - No error message, `Debug` output or panic includes secret material: passwords, keys or plaintext.
 - CLI exit codes: `0` success, `1` general or user error, `2` usage error, `3` authentication or integrity failure.
   Every `pwv-core` error except `Io` exits with `3`: a vault that cannot be parsed, has out-of-range parameters or fails authentication is treated as an integrity failure. A missing or unreadable file exits with `1`.
+- Generator option errors (`pwv-core::generator::GenError`) are a separate type, not `pwv-core::Error`, so a bad `pwv gen` option exits with `1`, not `3`.
+
+## Password generator
+
+`pwv-core::generator` draws from the OS random number generator (`rand::rngs::SysRng`).
+
+- **Passwords:** each character is picked with `rand`'s `IndexedRandom::choose`, a uniform index with no modulo bias, from the union of the enabled classes: `a-z`, `A-Z`, `0-9` and the 32 ASCII punctuation characters (94 in total). `--no-ambiguous` removes `0 O 1 l I`. Length defaults to 20, from 8 to 256.
+- **Every enabled class appears.** The whole password is redrawn until it does (rejection sampling), so every position stays uniform. Patching a missing class into a random position would not.
+- **Entropy** is reported exactly: `log2` of the number of passwords that contain every class, by inclusion–exclusion. That is slightly below `length · log2(alphabet)`.
+- **Passphrases:** 4 to 64 words from the EFF large wordlist (7776 words, about 12.9 bits each), joined with `-`. Four list words contain a hyphen (`drop-down`, `felt-tip`, `t-shirt`, `yo-yo`), which costs a negligible amount of entropy.
+- A chi-squared test over 1 024 000 characters (seeded, so deterministic) checks the selection is uniform at p > 0.001.
