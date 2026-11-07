@@ -1,6 +1,6 @@
 ## [0.1.0] - 2026-10-27
 
-### 🚀 Features
+### Features
 
 - *(kdf)* Add KdfParams with default, floor and ceiling
 - *(kdf)* Derive 256-bit key with argon2id
@@ -17,7 +17,7 @@
 - *(storage)* Unlock vault with master password
 - *(storage)* Keep previous file as .bak and set 0600 on unix
 
-### 📚 Documentation
+### Documentation
 
 - Add DESIGN.md with goals and non-goals
 - Specify vault file format v1
@@ -28,12 +28,12 @@
 - Record benchmark results and chosen defaults
 - Add development process note and dependency versions
 
-### ⚡ Performance
+### Performance
 
 - *(kdf)* Add kdf timing example binary
 - *(kdf)* Raise default memory cost to 256 mib
 
-### 🧪 Testing
+### Testing
 
 - *(core)* Add placeholder test so ci has something to run
 - *(kdf)* Add rfc 9106 known-answer test
@@ -51,7 +51,7 @@
 - *(core)* Wrong password fails and leaves file unchanged
 - *(core)* Check the untampered vault unlocks before tampering
 
-### ⚙️ Miscellaneous Tasks
+### Maintenance
 
 - Add licences, gitignore and agent build plan
 - Add cargo workspace with pwv-core and pwv-cli crates
