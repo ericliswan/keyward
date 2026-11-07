@@ -477,3 +477,39 @@ fn full_lifecycle_never_prints_a_secret_unasked() {
     quiet(&["delete", "mail", "--yes"], &[NEW]);
     quiet(&["list"], &[NEW]).stdout("");
 }
+
+/// Proves: a wrong master password exits 3 with the generic message from every command that
+/// unlocks, prints nothing on stdout and leaves the vault and its `.bak` byte for byte unchanged.
+#[test]
+#[cfg_attr(
+    not(feature = "insecure-test-kdf"),
+    ignore = "slow production KDF; run with --features insecure-test-kdf"
+)]
+fn wrong_password_exits_3_and_changes_nothing() {
+    const NEW: &str = "lantern quiver orchard basalt";
+    let dir = tempfile::tempdir().unwrap();
+    let vault = dir.path().join("vault.pwv");
+    let bak = dir.path().join("vault.pwv.bak");
+    init(&vault, &[MASTER, MASTER], &[]).success();
+    run(&vault, &["add", "mail"], &[MASTER, "alice", "s3cret", ""]).success();
+    let before = (fs::read(&vault).unwrap(), fs::read(&bak).unwrap());
+
+    let commands: [&[&str]; 6] = [
+        &["list"],
+        &["get", "mail", "--show", "--force", "--no-clipboard"],
+        &["add", "bank"],
+        &["edit", "mail", "--notes"],
+        &["delete", "mail", "--yes"],
+        &["change-master"],
+    ];
+    for args in commands {
+        // The later answers would be read as the entry fields or new password if unlock let through.
+        run(&vault, args, &["wrong password", NEW, NEW, NEW])
+            .code(3)
+            .stdout("")
+            .stderr(predicate::str::contains(
+                "wrong password or corrupted vault",
+            ));
+    }
+    assert_eq!((fs::read(&vault).unwrap(), fs::read(&bak).unwrap()), before);
+}
