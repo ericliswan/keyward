@@ -17,7 +17,7 @@ Direct dependencies of `pwv-core`, as locked in `Cargo.lock`:
 | --- | --- | --- |
 | `argon2` | 0.6.0 | Argon2id key derivation |
 | `chacha20poly1305` | 0.11.0 | XChaCha20-Poly1305 encryption |
-| `rand` | 0.10.3 | OS random number generator |
+| `rand` | 0.10.3 | OS random number generator, password generator |
 | `secrecy` | 0.10.3 | Master password handling |
 | `zeroize` | 1.9.1 | Wiping keys and plaintext from memory |
 | `serde` / `serde_json` | 1.0.229 / 1.0.154 | Vault serialisation |
@@ -25,9 +25,25 @@ Direct dependencies of `pwv-core`, as locked in `Cargo.lock`:
 | `time` | 0.3.55 | Entry timestamps |
 | `thiserror` | 2.0.21 | Error type |
 | `directories` | 6.0.0 | Default vault path |
+| `sha2` | 0.11.1 | Clipboard fingerprint (SHA-256) |
 | `tempfile` | 3.27.0 | Atomic saves |
 
 Tests also use `proptest` 1.12.0 and `hex-literal` 1.1.0.
+
+Direct dependencies of `pwv-cli` (the `pwv` binary), besides `pwv-core`:
+
+| Crate | Version | Used for |
+| --- | --- | --- |
+| `clap` | 4.6.7 | Command-line parsing |
+| `rpassword` | 7.5.4 | Hidden password prompts |
+| `zxcvbn` | 3.1.1 | Master-password strength check |
+| `arboard` | 3.7.0 | Clipboard access |
+| `ctrlc` | 3.5.2 | Clearing the clipboard on Ctrl-C |
+| `secrecy` / `zeroize` | 0.10.3 / 1.9.1 | Secret handling |
+| `time` | 0.3.55 | Entry timestamps |
+| `anyhow` | 1.0.104 | Error reporting |
+
+CLI tests also use `assert_cmd` 2.2.2, `predicates` 3.1.4 and `tempfile` 3.27.0.
 
 ## Development process
 
