@@ -34,8 +34,20 @@ impl ArboardClipboard {
 }
 
 impl Clipboard for ArboardClipboard {
+    /// Marks the text as a secret so clipboard history and sync leave it out. Each platform's hint
+    /// is a convention the history tool has to honour; Linux uses KDE's password-manager hint.
     fn set(&mut self, text: &str) -> Result<()> {
-        Ok(self.0.set().text(text)?)
+        let set = self.0.set();
+        #[cfg(target_os = "macos")]
+        let set = arboard::SetExtApple::exclude_from_history(set);
+        #[cfg(windows)]
+        let set = arboard::SetExtWindows::exclude_from_monitoring(set);
+        #[cfg(all(
+            unix,
+            not(any(target_os = "macos", target_os = "android", target_os = "emscripten"))
+        ))]
+        let set = arboard::SetExtLinux::exclude_from_history(set);
+        Ok(set.text(text)?)
     }
 
     fn get(&mut self) -> Result<Zeroizing<String>> {
