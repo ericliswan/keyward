@@ -234,6 +234,9 @@ fn passphrase_with<R: Rng + ?Sized>(rng: &mut R, words: usize) -> Result<SecretT
 
 #[cfg(test)]
 mod tests {
+    use rand::SeedableRng;
+    use rand::rngs::StdRng;
+
     use super::*;
 
     #[test]
@@ -303,6 +306,41 @@ mod tests {
         let words = passphrase_entropy_bits(6).unwrap();
         assert!((words - 6.0 * 7776f64.log2()).abs() < 1e-9);
         assert_eq!(passphrase_entropy_bits(3).unwrap_err(), GenError::Words);
+    }
+
+    /// Pearson's chi-squared test that every character of the full 94-character alphabet is
+    /// equally likely, over 4000 × 256 = 1 024 000 characters.
+    ///
+    /// The seeded RNG makes the test deterministic; it checks the selection logic, not the OS
+    /// RNG. At length 256 the every-class requirement rejects almost nothing, so its bias is far
+    /// below what the test can see.
+    #[test]
+    fn characters_are_uniformly_distributed() {
+        // Chi-squared critical value for 93 degrees of freedom at p = 0.001.
+        const CRITICAL: f64 = 140.893_134_273_230_74;
+        let options = PasswordOptions {
+            length: MAX_LENGTH,
+            ..PasswordOptions::default()
+        };
+        let alphabet = options.classes().unwrap().concat();
+        assert_eq!(alphabet.len(), 94);
+
+        let mut rng = StdRng::seed_from_u64(0x7077_765f_6765_6e00);
+        let mut counts = [0u64; 128];
+        let rounds = 4000;
+        for _ in 0..rounds {
+            for b in password_with(&mut rng, &options).unwrap().expose().bytes() {
+                counts[usize::from(b)] += 1;
+            }
+        }
+        let total = (rounds * MAX_LENGTH) as f64;
+        let expected = total / alphabet.len() as f64;
+        let chi2: f64 = alphabet
+            .iter()
+            .map(|&b| (counts[usize::from(b)] as f64 - expected).powi(2) / expected)
+            .sum();
+        assert_eq!(counts.iter().sum::<u64>() as f64, total);
+        assert!(chi2 < CRITICAL, "chi-squared {chi2} >= {CRITICAL}");
     }
 
     #[test]
