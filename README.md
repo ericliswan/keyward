@@ -33,4 +33,8 @@ Tests also use `proptest` 1.12.0 and `hex-literal` 1.1.0.
 
 This project is built with AI-agent assistance (Claude Code) under the owner's design and review. The agent follows a written build plan ([AGENTS.md](AGENTS.md)): one issue, branch and pull request per change, with CI and a self-review on every pull request. The owner approves the design, the file format, the cryptographic choices and the KDF parameters at checkpoints before that work is merged.
 
+## Acknowledgements
+
+Passphrases use the [EFF large wordlist](https://www.eff.org/dice) by the Electronic Frontier Foundation, licensed under [CC BY 3.0 US](https://creativecommons.org/licenses/by/3.0/us/). It is included unmodified in `crates/pwv-core/src/wordlist/eff_large.txt`.
+
 Licensed under either of [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE) at your option.

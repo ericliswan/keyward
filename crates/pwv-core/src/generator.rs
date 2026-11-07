@@ -2,6 +2,12 @@
 //!
 //! Every character or word is picked with [`IndexedRandom::choose`], which draws a uniform index
 //! without modulo bias.
+//!
+//! Passphrases use the EFF large wordlist (7776 words, CC BY 3.0 US), stored verbatim in
+//! `src/wordlist/eff_large.txt` (SHA-256
+//! `addd35536511597a02fa0a9ff1e5284677b8883b83e986e43f15a3db996b903e`).
+
+use std::sync::LazyLock;
 
 use rand::Rng;
 use rand::rand_core::UnwrapErr;
@@ -19,6 +25,12 @@ pub const MIN_LENGTH: usize = 8;
 pub const MAX_LENGTH: usize = 256;
 /// Characters removed by [`PasswordOptions::avoid_ambiguous`]: `0 O 1 l I`.
 pub const AMBIGUOUS: &str = "0O1lI";
+/// Fewest words [`passphrase`] will generate.
+pub const MIN_WORDS: usize = 4;
+/// Most words [`passphrase`] will generate.
+pub const MAX_WORDS: usize = 64;
+/// Separator between passphrase words.
+pub const WORD_SEPARATOR: char = '-';
 
 const LOWER: &str = "abcdefghijklmnopqrstuvwxyz";
 const UPPER: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -35,7 +47,18 @@ pub enum GenError {
     /// Every character class was switched off.
     #[error("at least one character class must be enabled")]
     NoClasses,
+    /// The passphrase word count is outside [`MIN_WORDS`]..=[`MAX_WORDS`].
+    #[error("passphrase must have between {MIN_WORDS} and {MAX_WORDS} words")]
+    Words,
 }
+
+/// The EFF large wordlist: one `NNNNN<TAB>word` line per word.
+static WORDS: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
+    include_str!("wordlist/eff_large.txt")
+        .lines()
+        .filter_map(|line| line.split_once('\t').map(|(_, word)| word))
+        .collect()
+});
 
 /// What [`password`] generates. The default is 20 characters from all four classes.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -132,6 +155,35 @@ fn password_with<R: Rng + ?Sized>(
     }
 }
 
+/// A passphrase of `words` random words from the EFF large wordlist, joined with
+/// [`WORD_SEPARATOR`].
+///
+/// Four words in the list (`drop-down`, `felt-tip`, `t-shirt`, `yo-yo`) contain the separator, so
+/// a few passphrases can be read more than one way. The entropy this costs is negligible.
+///
+/// # Errors
+/// [`GenError::Words`] if `words` is out of range.
+///
+/// # Panics
+/// If the operating system's random number generator fails.
+pub fn passphrase(words: usize) -> Result<SecretText, GenError> {
+    passphrase_with(&mut UnwrapErr(SysRng), words)
+}
+
+fn passphrase_with<R: Rng + ?Sized>(rng: &mut R, words: usize) -> Result<SecretText, GenError> {
+    if !(MIN_WORDS..=MAX_WORDS).contains(&words) {
+        return Err(GenError::Words);
+    }
+    let mut out = Zeroizing::new(String::with_capacity(words * 10));
+    for i in 0..words {
+        if i > 0 {
+            out.push(WORD_SEPARATOR);
+        }
+        out.push_str(WORDS.choose(rng).ok_or(GenError::Words)?);
+    }
+    Ok(SecretText::from(std::mem::take(&mut *out)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -155,6 +207,34 @@ mod tests {
             for class in &classes {
                 assert!(pw.expose().bytes().any(|b| class.contains(&b)));
             }
+        }
+    }
+
+    #[test]
+    fn wordlist_has_7776_unique_lowercase_words() {
+        assert_eq!(WORDS.len(), 7776);
+        let unique: std::collections::HashSet<_> = WORDS.iter().collect();
+        assert_eq!(unique.len(), 7776);
+        assert!(
+            WORDS
+                .iter()
+                .all(|w| !w.is_empty() && w.bytes().all(|b| b.is_ascii_lowercase() || b == b'-'))
+        );
+    }
+
+    #[test]
+    fn passphrase_has_the_requested_words() {
+        // Split list words on the separator too, since four of them contain it.
+        let parts: std::collections::HashSet<&str> =
+            WORDS.iter().flat_map(|w| w.split(WORD_SEPARATOR)).collect();
+        for _ in 0..100 {
+            let p = passphrase(6).unwrap();
+            let split: Vec<&str> = p.expose().split(WORD_SEPARATOR).collect();
+            assert!((6..=12).contains(&split.len()));
+            assert!(split.iter().all(|part| parts.contains(part)));
+        }
+        for words in [0, MIN_WORDS - 1, MAX_WORDS + 1] {
+            assert_eq!(passphrase(words).unwrap_err(), GenError::Words);
         }
     }
 
