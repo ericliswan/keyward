@@ -1,6 +1,7 @@
 //! Copying a password to the clipboard and clearing it again after a timeout.
 
 use std::io::Write;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -53,22 +54,26 @@ pub fn copy(board: &mut impl Clipboard, text: &str) -> Result<[u8; 32]> {
     Ok(fingerprint(text.as_bytes()))
 }
 
-/// Counts down `timeout` on `out`, then clears the clipboard if it still holds the text whose
+/// Counts down `timeout` on `out`, or until `interrupted` is set (by Ctrl-C), then clears the clipboard if it still holds the text whose
 /// fingerprint is `copied`. Anything copied since is left alone. Returns whether it cleared.
 pub fn clear_after(
     board: &mut impl Clipboard,
     copied: &[u8; 32],
     timeout: Duration,
+    interrupted: &AtomicBool,
     mut sleep: impl FnMut(Duration),
     out: &mut impl Write,
 ) -> Result<bool> {
     // Write errors are ignored: a closed stderr must never stop the clear.
     let mut left = timeout;
     let mut shown = None;
-    while !left.is_zero() {
+    while !left.is_zero() && !interrupted.load(Ordering::SeqCst) {
         let secs = left.as_secs() + u64::from(left.subsec_nanos() > 0);
         if shown != Some(secs) {
-            let _ = write!(out, "\rClipboard clears in {secs:>3} s ");
+            let _ = write!(
+                out,
+                "\rClipboard clears in {secs:>3} s (Ctrl-C clears now) "
+            );
             let _ = out.flush();
             shown = Some(secs);
         }
@@ -120,7 +125,9 @@ mod tests {
         let mut slept = Duration::ZERO;
         let mut out = Vec::new();
         let timeout = Duration::from_secs(secs);
-        let cleared = clear_after(board, copied, timeout, |d| slept += d, &mut out).unwrap();
+        let never = AtomicBool::new(false);
+        let sleep = |d| slept += d;
+        let cleared = clear_after(board, copied, timeout, &never, sleep, &mut out).unwrap();
         (cleared, slept, String::from_utf8(out).unwrap())
     }
 
@@ -168,5 +175,32 @@ mod tests {
         board.0 = None; // emptied, or now holding an image
         let (cleared, _, _) = run(&mut board, &copied, 1);
         assert!(!cleared);
+    }
+
+    #[test]
+    fn ctrl_c_clears_without_waiting_out_the_timeout() {
+        let mut board = FakeClipboard::default();
+        let copied = copy(&mut board, "hunter2").unwrap();
+        let interrupted = AtomicBool::new(false);
+        let mut slept = Duration::ZERO;
+        let sleep = |d| {
+            slept += d;
+            if slept >= Duration::from_secs(2) {
+                interrupted.store(true, Ordering::SeqCst);
+            }
+        };
+        let timeout = Duration::from_secs(30);
+        let cleared = clear_after(
+            &mut board,
+            &copied,
+            timeout,
+            &interrupted,
+            sleep,
+            &mut Vec::new(),
+        )
+        .unwrap();
+        assert!(cleared);
+        assert_eq!(board.0, None);
+        assert_eq!(slept, Duration::from_secs(2));
     }
 }

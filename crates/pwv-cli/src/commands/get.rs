@@ -2,10 +2,11 @@
 
 use std::io::{self, BufRead, IsTerminal};
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 
 use crate::clipboard::{self, ArboardClipboard};
 use crate::prompt::Prompter;
@@ -36,6 +37,11 @@ pub fn run(
     let Some((mut board, timeout)) = board else {
         return Ok(());
     };
+    // Installed only now, so Ctrl-C at a prompt still just quits. With the `termination` feature
+    // it also catches SIGTERM and SIGHUP, such as a closed terminal window.
+    static INTERRUPTED: AtomicBool = AtomicBool::new(false);
+    ctrlc::set_handler(|| INTERRUPTED.store(true, Ordering::SeqCst))
+        .context("cannot install the Ctrl-C handler")?;
     let copied = clipboard::copy(&mut board, entry.password.expose())?;
     eprintln!("Copied the password for {} to the clipboard.", entry.site);
     // The vault, and with it the password, is wiped before the wait.
@@ -44,6 +50,7 @@ pub fn run(
         &mut board,
         &copied,
         timeout,
+        &INTERRUPTED,
         thread::sleep,
         &mut io::stderr(),
     )?;
