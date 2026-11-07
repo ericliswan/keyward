@@ -49,3 +49,4 @@ This is a draft written before any code. The final version, with each claim link
 - Clipboard history and clipboard managers may keep copies.
 - Copies of secrets made by `serde_json`, the terminal, the clipboard or the OS cannot all be wiped.
 - File size and modification time are visible.
+- Changing the master password does not re-encrypt older copies. `<vault>.bak` still opens with the old password until the next save, and so do any copies the user made. `pwv change-master` says so; delete them if the old password may have leaked.
