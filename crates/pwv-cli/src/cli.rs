@@ -44,12 +44,23 @@ pub enum Command {
     Get {
         /// Site or service name.
         site: String,
-        /// Print the password to stdout instead.
+        /// Also print the password to stdout.
         #[arg(long)]
         show: bool,
         /// With --show, print even when stdout is not a terminal (a pipe or a file).
         #[arg(long, requires = "show")]
         force: bool,
+        /// Seconds until the clipboard is cleared, if it still holds the password.
+        #[arg(
+            long,
+            value_name = "SECONDS",
+            default_value_t = 30,
+            value_parser = clap::value_parser!(u64).range(1..),
+        )]
+        timeout: u64,
+        /// With --show, only print; leave the clipboard alone.
+        #[arg(long, requires = "show", conflicts_with = "timeout")]
+        no_clipboard: bool,
     },
     /// List sites and usernames, never passwords.
     List {

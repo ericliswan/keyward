@@ -74,6 +74,17 @@ fn usage_errors_exit_2() {
         .assert()
         .code(2);
     pwv().args(["get", "mail", "--force"]).assert().code(2);
+    // --no-clipboard only makes sense with --show, and then there is nothing to time out.
+    pwv()
+        .args(["get", "mail", "--no-clipboard"])
+        .assert()
+        .code(2);
+    for args in [
+        ["get", "mail", "--show", "--no-clipboard", "--timeout", "5"],
+        ["get", "mail", "--timeout", "0", "--show", "--no-clipboard"],
+    ] {
+        pwv().args(args).assert().code(2);
+    }
 }
 
 #[test]
@@ -201,17 +212,14 @@ fn get_edit_and_delete_choose_among_matching_entries() {
     run(&vault, &["add", "Mail"], &[MASTER, "bob", "s3cret-bob", ""]).success();
     let contains = predicate::str::contains;
 
-    // stdout is a pipe here, so these are refused before the master password is read.
+    // stdout is a pipe here, so this is refused before the master password is read.
     run(&vault, &["get", "mail", "--show"], &[])
         .code(1)
         .stdout("")
         .stderr(contains("--force"));
-    run(&vault, &["get", "mail"], &[])
-        .code(1)
-        .stderr(contains("--show"));
     run(
         &vault,
-        &["get", "mail", "--show", "--force"],
+        &["get", "mail", "--show", "--force", "--no-clipboard"],
         &[MASTER, "2"],
     )
     .success()
@@ -221,9 +229,13 @@ fn get_edit_and_delete_choose_among_matching_entries() {
             .and(contains("2) Mail  bob"))
             .and(contains("s3cret").not()),
     );
-    run(&vault, &["get", "web", "--show", "--force"], &[MASTER])
-        .code(1)
-        .stderr(contains("no entry for web"));
+    run(
+        &vault,
+        &["get", "web", "--show", "--force", "--no-clipboard"],
+        &[MASTER],
+    )
+    .code(1)
+    .stderr(contains("no entry for web"));
 
     run(
         &vault,
