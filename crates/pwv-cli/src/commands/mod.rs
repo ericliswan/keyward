@@ -11,6 +11,7 @@ mod list;
 
 use std::io::BufRead;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
 use pwv_core::model::{Entry, SecretText, Vault};
@@ -47,7 +48,16 @@ pub fn run(cli: Cli) -> Result<()> {
             }
             add::run(&vault, site, generate, &mut prompt)
         }
-        Command::Get { site, show, force } => get::run(&vault, &site, show, force, &mut prompt),
+        Command::Get {
+            site,
+            show,
+            force,
+            timeout,
+            no_clipboard,
+        } => {
+            let clear_after = (!no_clipboard).then(|| Duration::from_secs(timeout));
+            get::run(&vault, &site, show, force, clear_after, &mut prompt)
+        }
         Command::List { search } => list::run(&vault, search.as_deref(), &mut prompt),
         Command::Edit { site, field } => edit::run(&vault, &site, &field, &mut prompt),
         Command::Delete { site, yes } => delete::run(&vault, &site, yes, &mut prompt),
