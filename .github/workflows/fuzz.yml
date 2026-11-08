@@ -1,0 +1,46 @@
+name: Fuzz
+
+# Separate from ci.yml because path filters apply to a whole workflow, not one job.
+on:
+  pull_request:
+    paths:
+      - crates/pwv-core/src/header.rs
+      - crates/pwv-core/src/kdf.rs # Header::parse calls KdfParams::validate
+      - fuzz/**
+      - .github/workflows/fuzz.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+      - run: cargo install cargo-fuzz --locked
+      - run: cargo fmt --manifest-path fuzz/Cargo.toml --check
+      - name: Fuzz the header parser for 60 seconds
+        # Reaching the time limit exits 0, and -timeout_exitcode=0 lets a slow
+        # input pass too. A panic or failed assertion still exits non-zero.
+        # +nightly: rust-toolchain.toml pins stable, which would override the default.
+        run: cargo +nightly fuzz run parse_header -- -max_total_time=60 -timeout_exitcode=0
+      - name: Keep the crashing input
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-artifacts
+          path: fuzz/artifacts
