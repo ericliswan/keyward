@@ -28,7 +28,7 @@ Direct dependencies of `pwv-core`, as locked in `Cargo.lock`:
 | `sha2` | 0.11.1 | Clipboard fingerprint (SHA-256) |
 | `tempfile` | 3.27.0 | Atomic saves |
 
-Tests also use `proptest` 1.12.0 and `hex-literal` 1.1.0.
+Tests also use `proptest` 1.12.0 and `hex-literal` 1.1.0. The header parser is fuzzed with `cargo-fuzz` 0.13.2 and `libfuzzer-sys` 0.4.13 (see [CONTRIBUTING.md](CONTRIBUTING.md#fuzzing)).
 
 Direct dependencies of `pwv-cli` (the `pwv` binary), besides `pwv-core`:
 
