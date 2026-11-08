@@ -19,6 +19,18 @@ cargo deny check
 
 CI runs the same checks on Linux, macOS and Windows. Never disable a check to get green.
 
+## Fuzzing
+
+`fuzz/` holds a [cargo-fuzz](https://github.com/rust-fuzz/cargo-fuzz) target for the vault header parser. It needs the nightly toolchain and is its own workspace, so the commands above never build it:
+
+```sh
+rustup toolchain install nightly
+cargo install --locked cargo-fuzz
+cargo +nightly fuzz run parse_header -- -max_total_time=60
+```
+
+CI runs the same 60-second fuzz on pull requests that change `header.rs`, `kdf.rs` or `fuzz/`. If it finds a crash, the failing input is in `fuzz/artifacts/parse_header/`. Reproduce it with `cargo +nightly fuzz run parse_header <file>`, then add a regression test in `header.rs` before fixing the bug.
+
 ## Workflow
 
 - One issue, one branch, one pull request. Open the issue first.
