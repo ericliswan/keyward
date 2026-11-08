@@ -1,0 +1,23 @@
+[package]
+name = "pwv-fuzz"
+version = "0.0.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4.13"
+pwv-core = { path = "../crates/pwv-core" }
+
+[[bin]]
+name = "parse_header"
+path = "fuzz_targets/parse_header.rs"
+test = false
+doc = false
+bench = false
+
+# A separate workspace: fuzzing needs nightly, so stable builds and cargo-deny never see this crate.
+[workspace]
